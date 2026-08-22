@@ -66,7 +66,13 @@
   }
 
   function isMusicAssistantPlayer(state) {
-    return Boolean(state && state.entity_id && state.entity_id.startsWith("media_player.") && state.attributes && state.attributes.app_id === "music_assistant");
+    return Boolean(
+      state &&
+      state.entity_id &&
+      state.entity_id.startsWith("media_player.") &&
+      state.attributes &&
+      state.attributes.mass_player_type === "player"
+    );
   }
 
   function stereoGroupInfo(entityId) {

@@ -3803,8 +3803,8 @@
 
 .beast-family-event-slot.is-shared {
   grid-column: 1 / -1;
-  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
-  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 20%, var(--border));
 }
 
 .beast-family-cell {
@@ -3982,4 +3982,58 @@
 .beast-family-event-middle-title {
   opacity: 0.58;
   font-weight: 650 !important;
+}
+
+/* Shared family events */
+.beast-family-event-slot.is-shared .beast-family-event {
+  border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--warning) 22%, var(--surface-solid)),
+      color-mix(in srgb, var(--warning) 10%, var(--surface-solid))
+    );
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning) 78%, transparent);
+}
+
+.beast-family-event-slot.is-shared .beast-family-event time {
+  color: var(--warning);
+}
+
+/* Personal multi-day events */
+.beast-family-event.is-start,
+.beast-family-event.is-middle,
+.beast-family-event.is-end {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 20%, var(--surface-solid)),
+      color-mix(in srgb, var(--accent-soft) 72%, var(--surface-solid))
+    );
+  border-left-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-right-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.beast-family-event.is-start {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+.beast-family-event.is-middle,
+.beast-family-event.is-end {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+/* Shared colour wins when a shared event also spans several days */
+.beast-family-event-slot.is-shared .beast-family-event.is-start,
+.beast-family-event-slot.is-shared .beast-family-event.is-middle,
+.beast-family-event-slot.is-shared .beast-family-event.is-end {
+  border-left-color: color-mix(in srgb, var(--warning) 60%, var(--border));
+  border-right-color: color-mix(in srgb, var(--warning) 60%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--warning) 24%, var(--surface-solid)),
+      color-mix(in srgb, var(--warning) 11%, var(--surface-solid))
+    );
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning) 82%, transparent);
 }

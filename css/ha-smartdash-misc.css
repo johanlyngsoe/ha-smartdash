@@ -3658,3 +3658,240 @@
 .beast-energy-utility-edit { flex-shrink: 0; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--ink-muted); cursor: pointer; touch-action: manipulation; }
 .beast-energy-utility-edit:hover { color: var(--ink); }
 .beast-energy-utility-edit.is-active { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
+
+
+/* Lyngsoe Family Planner */
+#beastFamilyPlanner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.beast-family-header {
+  display: grid;
+  grid-template-columns: 84px repeat(4, minmax(0, 1fr));
+  gap: 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+}
+
+.beast-family-header > div,
+.beast-family-header > strong {
+  min-width: 0;
+  padding: 11px 10px;
+  border-left: 1px solid var(--border);
+}
+
+.beast-family-header > div:first-child {
+  border-left: 0;
+}
+
+.beast-family-header > strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.beast-family-grid {
+  max-height: min(68vh, 860px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 0 0 14px 14px;
+  scrollbar-width: thin;
+}
+
+.beast-family-row {
+  display: grid;
+  grid-template-columns: 84px repeat(4, minmax(0, 1fr));
+  min-height: 66px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+}
+
+.beast-family-row:first-child {
+  border-top: 0;
+}
+
+.beast-family-row.is-today {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 14%, var(--surface-solid)),
+      color-mix(in srgb, var(--surface-solid) 92%, transparent)
+    );
+}
+
+.beast-family-date {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  gap: 0 6px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border);
+}
+
+.beast-family-date small {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.beast-family-date strong {
+  color: var(--ink);
+  font-size: 21px;
+  line-height: 1;
+}
+
+.beast-family-date span {
+  align-self: end;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.beast-family-row.is-today .beast-family-date strong {
+  color: var(--accent);
+}
+
+.beast-family-day-content {
+  display: contents;
+}
+
+.beast-family-person-row {
+  display: contents;
+}
+
+.beast-family-cell {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 7px;
+  border-left: 1px solid var(--border);
+}
+
+.beast-family-cell:first-child {
+  border-left: 0;
+}
+
+.beast-family-shared {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 7px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.beast-family-event {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-soft) 52%, var(--surface-solid));
+  color: var(--ink);
+}
+
+.beast-family-event time {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.beast-family-event span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .beast-family-header {
+    grid-template-columns: 66px repeat(4, minmax(125px, 1fr));
+  }
+
+  .beast-family-row {
+    grid-template-columns: 66px repeat(4, minmax(125px, 1fr));
+  }
+
+  #beastFamilyPlanner {
+    overflow-x: auto;
+  }
+
+  .beast-family-date {
+    padding-inline: 7px;
+  }
+}
+
+/* Lyngsoe Family Planner - allow Calendar page to scroll on desktop */
+.beast-waste-panel.beast-native-layout-grid {
+  height: auto !important;
+  min-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.beast-waste-panel .beast-native-layout-card {
+  overflow: visible;
+}
+
+/* Lyngsoe Family Planner - standalone Calendar page */
+.beast-family-calendar-page {
+  width: 100%;
+  min-height: 0;
+  height: calc(100dvh - (2 * var(--space-5)));
+  overflow: hidden;
+}
+
+.beast-family-calendar-page #beastFamilyPlanner {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.beast-family-calendar-page .beast-family-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.beast-family-calendar-page .beast-family-grid {
+  max-height: none;
+  overflow: visible;
+}
+
+.beast-family-date small {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.beast-family-date small b {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}

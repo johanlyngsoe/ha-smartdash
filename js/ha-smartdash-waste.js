@@ -3,6 +3,35 @@
   function wasteSensorIds() { return BeastConfig.get("panels.waste.sensors") || []; }
   function calendarEntityIds() { return BeastConfig.get("panels.waste.calendars") || []; }
   function scheduleCalendarIds() { return BeastConfig.get("panels.waste.scheduleCalendars") || []; }
+  function familyCalendarConfig() {
+    return BeastConfig.get("panels.waste.familyCalendars") || {
+      frederikke: [],
+      mikkeline: [],
+      christina: [],
+      johan: [],
+      shared: []
+    };
+  }
+
+  function familyCalendarIds() {
+    const config = familyCalendarConfig();
+    return [...new Set([
+      ...(config.frederikke || []),
+      ...(config.mikkeline || []),
+      ...(config.christina || []),
+      ...(config.johan || []),
+      ...(config.shared || [])
+    ].filter(Boolean))];
+  }
+
+  function familyCalendarOwners(entityId) {
+    const config = familyCalendarConfig();
+    const owners = [];
+    for (const key of ["frederikke", "mikkeline", "christina", "johan", "shared"]) {
+      if ((config[key] || []).includes(entityId)) owners.push(key);
+    }
+    return owners;
+  }
 
   let containerEl = null;
   let calendarRequest = 0;
@@ -338,6 +367,33 @@
     return date.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
+  async function loadFamilyCalendarEvents() {
+    const start = new Date();
+    const end = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
+    const allStates = BeastHaSocket.getAllStates();
+    const availableCalendars = familyCalendarIds().filter((id) => allStates.has(id));
+
+    const results = await Promise.all(availableCalendars.map(async (id) => {
+      try {
+        const events = await BeastAuth.haFetch(`/api/calendars/${id}?start=${start.toISOString()}&end=${end.toISOString()}`);
+        return (events || []).map((event) => ({
+          ...event,
+          calendarId: id,
+          owners: familyCalendarOwners(id)
+        }));
+      } catch (error) {
+        return [];
+      }
+    }));
+
+    return results.flat()
+      .filter((event) => {
+        const startValue = event.start?.dateTime || event.start?.date;
+        return Boolean(startValue);
+      })
+      .sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date));
+  }
+
   async function loadCalendarEvents() {
     const requestId = ++calendarRequest;
     const start = new Date();
@@ -369,6 +425,83 @@
         return Number.isFinite(startMs) && startMs >= now - 5 * 60 * 1000;
       })
       .sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date));
+  }
+
+  function renderFamilyPlanner(events) {
+    const host = document.getElementById("beastFamilyPlanner");
+    if (!host) return;
+
+    const locale = window.HASmartdashI18n?.locale || "da-DK";
+    const people = [
+      ["frederikke", "Frederikke"],
+      ["mikkeline", "Mikkeline"],
+      ["christina", "Christina"],
+      ["johan", "Johan"]
+    ];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dayKey = (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+    const eventDayKey = (event) =>
+      String(event.start?.dateTime || event.start?.date || "").slice(0, 10);
+
+    const isoWeekNumber = (date) => {
+      const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const day = utc.getUTCDay() || 7;
+      utc.setUTCDate(utc.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+      return Math.ceil((((utc - yearStart) / 86400000) + 1) / 7);
+    };
+
+    const eventMarkup = (event) => {
+      const start = event.start?.dateTime || event.start?.date;
+      const allDay = !event.start?.dateTime;
+      const date = new Date(start);
+      const time = allDay ? "" : date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+      return `<div class="beast-family-event">
+        ${time ? `<time>${escapeHtml(time)}</time>` : ""}
+        <span>${escapeHtml(event.summary || t("Uden titel", "Untitled"))}</span>
+      </div>`;
+    };
+
+    const rows = Array.from({ length: 21 }, (_, offset) => {
+      const day = new Date(today);
+      day.setDate(today.getDate() + offset);
+      const key = dayKey(day);
+      const dayEvents = events.filter((event) => eventDayKey(event) === key);
+
+      const shared = dayEvents.filter((event) => (event.owners || []).includes("shared"));
+      const personCells = people.map(([personKey]) => {
+        const personEvents = dayEvents.filter((event) => (event.owners || []).includes(personKey));
+        return `<div class="beast-family-cell">${personEvents.map(eventMarkup).join("")}</div>`;
+      }).join("");
+
+      return `<div class="beast-family-row${offset === 0 ? " is-today" : ""}">
+        <div class="beast-family-date">
+          <small>
+            ${day.toLocaleDateString(locale, { weekday: "short" }).replace(".", "")}
+            ${day.getDay() === 1 ? `<b>Uge ${isoWeekNumber(day)}</b>` : ""}
+          </small>
+          <strong>${day.getDate()}</strong>
+          <span>${day.toLocaleDateString(locale, { month: "short" }).replace(".", "")}</span>
+        </div>
+        <div class="beast-family-day-content">
+          ${shared.length ? `<div class="beast-family-shared">${shared.map(eventMarkup).join("")}</div>` : ""}
+          <div class="beast-family-person-row">${personCells}</div>
+        </div>
+      </div>`;
+    }).join("");
+
+    host.innerHTML = `
+      <div class="beast-family-header">
+        <div></div>
+        ${people.map(([, label]) => `<strong>${escapeHtml(label)}</strong>`).join("")}
+      </div>
+      <div class="beast-family-grid">${rows}</div>
+    `;
   }
 
   function renderCalendarEvents(events, weather = { daily:[], hourly:[] }) {
@@ -419,33 +552,26 @@
 
   function render() {
     if (!containerEl) return;
-    const scheduleIds = scheduleCalendarIds();
-    const scheduleSections = scheduleIds.map((entityId) => {
-      const slug = scheduleCardSlug(entityId);
-      return `<section class="beast-waste-section" data-calendar-section="schedule-${slug}">
-        <header class="beast-calendar-section-head"><span>${BeastCore.icon("calendar", { size:22 })}</span><div><small>${t("Skoleskema", "School schedule")}</small><h2>${escapeHtml(scheduleCardLabel(entityId))}</h2></div></header>
-        <div class="beast-schedule-body" id="beastSchedule-${slug}"><p class="beast-music-empty">${t("Henter…", "Loading…")}</p></div>
-      </section>`;
-    }).join("");
+
     containerEl.innerHTML = `
-      <button type="button" class="beast-page-edit-trigger" id="beastCalendarLayoutEdit" aria-label="${t("Rediger kalenderlayout", "Edit calendar layout")}">⋮</button>
-      ${scheduleSections}
-      <section class="beast-waste-section" data-calendar-section="waste">
-        <header class="beast-calendar-section-head"><span>${BeastCore.icon("calendar", { size:22 })}</span><div><small>${t("Husets afhentninger", "Household collections")}</small><h2>${t("Affald", "Waste")}</h2></div></header>
-        <div class="beast-calendar-waste-list" style="--calendar-item-rows:${Math.max(1, Math.min(cardRows("waste", 3), wasteSensorIds().length || 1))}">${buildWasteMarkup()}</div>
-      </section>
-      <section class="beast-waste-section" data-calendar-section="events">
-        <header class="beast-calendar-section-head"><span>${BeastCore.icon("calendar", { size:22 })}</span><div><small>${t("De næste 14 dage", "Next 14 days")}</small><h2>${t("Kommende aftaler", "Upcoming events")}</h2></div><time>${new Date().toLocaleDateString(window.HASmartdashI18n?.locale || "da-DK", { weekday:"long", day:"numeric", month:"long" })}</time></header>
-        <div class="beast-calendar-events" id="beastCalendarEvents"><p class="beast-music-empty">${t("Henter…", "Loading…")}</p></div>
+      <section class="beast-waste-section beast-family-calendar-page" data-calendar-section="family">
+        <header class="beast-calendar-section-head">
+          <span>${BeastCore.icon("calendar", { size:22 })}</span>
+          <div>
+            <small>${t("De næste 3 uger", "Next 3 weeks")}</small>
+            <h2>${t("Familiekalender", "Family calendar")}</h2>
+          </div>
+        </header>
+
+        <div id="beastFamilyPlanner">
+          <p class="beast-music-empty">${t("Henter…", "Loading…")}</p>
+        </div>
       </section>
     `;
-    wireCalendarLayout();
-    wireScheduleNav();
 
-    scheduleIds.forEach((entityId) => renderScheduleCard(entityId));
-    Promise.all([loadCalendarEvents(), loadCalendarWeather()])
-      .then(([events, weather]) => renderCalendarEvents(events, weather))
-      .catch(() => renderCalendarEvents([]));
+    loadFamilyCalendarEvents()
+      .then((familyEvents) => renderFamilyPlanner(familyEvents || []))
+      .catch(() => renderFamilyPlanner([]));
   }
 
   function wireScheduleNav() {
@@ -475,13 +601,18 @@
         return { id, label: `${t("Skema", "Schedule")} · ${scheduleCardLabel(entityId)}`, selector: `[data-calendar-section="${id}"]`, titleSelector: "h2", enabled: !hidden.has(id), desktop: { x: 1, y: 1 + index * 12, w: 8, h: 12 } };
       }),
       { id:"waste", label:t("Affald og afhentning", "Waste and collections"), selector:'[data-calendar-section="waste"]', titleSelector:"h2", available:()=>wasteSensorIds().length > 0, enabled:!hidden.has("waste"), desktop:{x:9,y:21,w:4,h:4}, options:{rows:cardRows("waste",3)}, controls:[{key:"rows",label:t("Antal viste rækker", "Visible rows"),min:1,max:30,default:3}] },
-      { id:"events", label:t("Kommende kalenderaftaler", "Upcoming calendar events"), selector:'[data-calendar-section="events"]', titleSelector:"h2", available:()=>calendarEntityIds().length > 0, enabled:!hidden.has("events"), desktop:{x:9,y:1,w:4,h:20}, options:{rows:cardRows("events",12)}, controls:[{key:"rows",label:t("Antal viste rækker", "Visible rows"),min:1,max:30,default:12}] }
+      { id:"events", label:t("Kommende kalenderaftaler", "Upcoming calendar events"), selector:'[data-calendar-section="events"]', titleSelector:"h2", available:()=>calendarEntityIds().length > 0, enabled:!hidden.has("events"), desktop:{x:9,y:1,w:4,h:20}, options:{rows:cardRows("events",12)}, controls:[{key:"rows",label:t("Antal viste rækker", "Visible rows"),min:1,max:30,default:12}] },
+      { id:"family", label:t("Familiekalender", "Family calendar"), selector:'[data-calendar-section="family"]', titleSelector:"h2", available:()=>familyCalendarIds().length > 0, enabled:!hidden.has("family"), desktop:{x:1,y:49,w:12,h:24} }
     ], onSave:()=>render() });
   }
 
   function openCalendarLayout(layout) {
     const hidden = new Set(Array.isArray(layout.hidden) ? layout.hidden : []);
-    const items = [["waste", t("Affald og afhentning", "Waste and collections")], ["events", t("Kommende kalenderaftaler", "Upcoming calendar events")]];
+    const items = [
+      ["family", t("Familiekalender", "Family calendar")],
+      ["waste", t("Affald og afhentning", "Waste and collections")],
+      ["events", t("Kommende kalenderaftaler", "Upcoming calendar events")]
+    ];
     const overlay = document.createElement("div"); overlay.className = "beast-modal-overlay";
     overlay.innerHTML = `<div class="beast-modal beast-calendar-layout-modal"><div class="beast-modal-header"><h3>${t("Rediger kalenderlayout", "Edit calendar layout")}</h3><button type="button" class="beast-modal-close" data-close>×</button></div><div class="beast-modal-body"><div class="beast-calendar-layout-list">${items.map(([id,label]) => `<label><input type="checkbox" data-calendar-layout-section="${id}" ${hidden.has(id) ? "" : "checked"}><strong>${label}</strong></label>`).join("")}</div><button type="button" class="beast-btn beast-btn-primary" data-save-calendar-layout>${t("Gem layout", "Save layout")}</button></div></div>`;
     document.body.appendChild(overlay);

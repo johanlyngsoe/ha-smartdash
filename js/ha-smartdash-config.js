@@ -56,7 +56,19 @@ const BeastConfig = (() => {
     robots: {
       vacuums: [], mowers: [], roomSelectors: [], leonoraImage: null, poulImage: null
     },
-    waste: { sensors: [], calendars: [], showCalendarCard: true, showWasteCard: true },
+    waste: {
+      sensors: [],
+      calendars: [],
+      familyCalendars: {
+        frederikke: [],
+        mikkeline: [],
+        christina: [],
+        johan: [],
+        shared: []
+      },
+      showCalendarCard: true,
+      showWasteCard: true
+    },
     heating: {
       rooms: [], heatPumps: [], heatPumpUnits: {}, automation: null, districtSensors: [], ventilationSensors: [], districtPlacement: "sidebar"
     },

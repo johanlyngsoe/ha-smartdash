@@ -35,6 +35,7 @@
 
   let containerEl = null;
   let calendarRequest = 0;
+  const familyEventLookup = new Map();
   let selectedCalendarDay = "all";
   // One card per configured schedule calendar (e.g. one per child) -- each
   // navigates its own week independently, so this is keyed by entity_id
@@ -440,11 +441,165 @@
       .sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date));
   }
 
+  function familyEventKey(event) {
+    return [
+      event.calendarId || "",
+      event.uid || "",
+      event.recurrence_id || "",
+      event.start?.dateTime || event.start?.date || ""
+    ].join("|");
+  }
+
+  function closeFamilyEventDetails() {
+    document.querySelector(".beast-family-detail-overlay")?.remove();
+  }
+
+  function openFamilyEventDetails(event) {
+    if (!event) return;
+
+    closeFamilyEventDetails();
+
+    const locale = window.HASmartdashI18n?.locale || "da-DK";
+    const allDay = Boolean(event.start?.date);
+
+    const formatValue = (value, includeTime = true) => {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+
+      return date.toLocaleString(locale, includeTime
+        ? {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit"
+          }
+        : {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+          }
+      );
+    };
+
+    const ownerLabels = {
+      frederikke: "Frederikke",
+      mikkeline: "Mikkeline",
+      christina: "Christina",
+      johan: "Johan",
+      shared: t("Fælles", "Shared")
+    };
+
+    const owners = (event.owners || [])
+      .map((owner) => ownerLabels[owner] || owner)
+      .join(", ");
+
+    let startText = "";
+    let endText = "";
+
+    if (allDay) {
+      startText = formatValue(`${event.start.date}T12:00:00`, false);
+
+      if (event.end?.date) {
+        const end = new Date(`${event.end.date}T12:00:00`);
+        end.setDate(end.getDate() - 1);
+        endText = end.toLocaleDateString(locale, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          year: "numeric"
+        });
+      }
+    } else {
+      startText = formatValue(event.start?.dateTime);
+      endText = formatValue(event.end?.dateTime);
+    }
+
+    const description = event.description
+      ? escapeHtml(event.description).replace(/\n/g, "<br>")
+      : "";
+
+    const location = event.location
+      ? escapeHtml(event.location).replace(/\n/g, "<br>")
+      : "";
+
+    const overlay = document.createElement("div");
+    overlay.className = "beast-family-detail-overlay";
+
+    overlay.innerHTML = `
+      <aside class="beast-family-detail-panel" role="dialog" aria-modal="true">
+        <header class="beast-family-detail-head">
+          <div>
+            <small>${owners ? escapeHtml(owners) : t("Kalenderaftale", "Calendar event")}</small>
+            <h2>${escapeHtml(event.summary || t("Uden titel", "Untitled"))}</h2>
+          </div>
+          <button type="button" class="beast-family-detail-close" data-family-detail-close aria-label="${t("Luk", "Close")}">×</button>
+        </header>
+
+        <div class="beast-family-detail-body">
+          <section class="beast-family-detail-time">
+            <div>
+              <small>${allDay ? t("Dato", "Date") : t("Fra", "From")}</small>
+              <strong>${escapeHtml(startText)}</strong>
+            </div>
+            ${endText && endText !== startText ? `
+              <div>
+                <small>${allDay ? t("Til", "Until") : t("Til", "Until")}</small>
+                <strong>${escapeHtml(endText)}</strong>
+              </div>
+            ` : ""}
+          </section>
+
+          ${location ? `
+            <section class="beast-family-detail-section">
+              <small>${t("Sted", "Location")}</small>
+              <div>${location}</div>
+            </section>
+          ` : ""}
+
+          ${description ? `
+            <section class="beast-family-detail-section">
+              <small>${t("Beskrivelse", "Description")}</small>
+              <div>${description}</div>
+            </section>
+          ` : ""}
+
+          ${event.rrule ? `
+            <section class="beast-family-detail-section">
+              <small>${t("Gentagelse", "Recurrence")}</small>
+              <div>${escapeHtml(event.rrule)}</div>
+            </section>
+          ` : ""}
+        </div>
+      </aside>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("click", (clickEvent) => {
+      if (
+        clickEvent.target === overlay ||
+        clickEvent.target.closest("[data-family-detail-close]")
+      ) {
+        closeFamilyEventDetails();
+      }
+    });
+  }
+
   function renderFamilyPlanner(events) {
     const host = document.getElementById("beastFamilyPlanner");
     if (!host) return;
 
     const locale = window.HASmartdashI18n?.locale || "da-DK";
+
+    familyEventLookup.clear();
+    events.forEach((event) => {
+      familyEventLookup.set(familyEventKey(event), event);
+    });
+
     const people = [
       ["frederikke", "Frederikke"],
       ["mikkeline", "Mikkeline"],
@@ -564,12 +719,16 @@
       const showStart = !info.allDay && (info.segment === "single" || info.segment === "start");
       const showEnd = !info.allDay && info.segment === "end";
 
-      return `<div class="beast-family-event is-${info.segment}">
+      const key = familyEventKey(event);
+
+      return `<button type="button"
+        class="beast-family-event is-${info.segment}"
+        data-family-event-key="${escapeHtml(key)}">
         ${showStart ? `<time>${escapeHtml(startTime)}</time>` : ""}
         ${showTitle ? `<span>${title}</span>` : ""}
         ${showMiddleTitle ? `<span class="beast-family-event-middle-title">${title}</span>` : ""}
         ${showEnd ? `<span class="beast-family-event-end">${t("til", "until")} ${escapeHtml(endTime)}</span>` : ""}
-      </div>`;
+      </button>`;
     };
 
     const rows = Array.from({ length: 21 }, (_, offset) => {
@@ -650,6 +809,14 @@
       </div>
       <div class="beast-family-grid">${rows}</div>
     `;
+
+    host.onclick = (clickEvent) => {
+      const eventButton = clickEvent.target.closest("[data-family-event-key]");
+      if (!eventButton) return;
+
+      const event = familyEventLookup.get(eventButton.dataset.familyEventKey);
+      if (event) openFamilyEventDetails(event);
+    };
   }
 
   function renderCalendarEvents(events, weather = { daily:[], hourly:[] }) {

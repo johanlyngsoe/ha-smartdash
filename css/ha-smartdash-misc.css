@@ -4037,3 +4037,156 @@
     );
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning) 82%, transparent);
 }
+
+/* Family calendar event details */
+.beast-family-event {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.beast-family-event:hover {
+  filter: brightness(1.12);
+}
+
+.beast-family-event:active {
+  transform: translateY(1px);
+}
+
+.beast-family-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(4, 7, 16, .56);
+  backdrop-filter: blur(5px);
+}
+
+.beast-family-detail-panel {
+  width: min(720px, 100%);
+  max-height: min(78dvh, 760px);
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--surface-2-solid) 96%, var(--accent-soft)),
+      var(--surface-solid)
+    );
+  box-shadow: 0 28px 70px rgba(0, 0, 0, .38);
+  color: var(--ink);
+}
+
+.beast-family-detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2-solid) 96%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.beast-family-detail-head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.beast-family-detail-head small,
+.beast-family-detail-section small,
+.beast-family-detail-time small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.beast-family-detail-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.25rem, 1.8vw, 1.7rem);
+  line-height: 1.15;
+}
+
+.beast-family-detail-close {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.beast-family-detail-body {
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px 24px;
+}
+
+.beast-family-detail-time {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.beast-family-detail-time > div,
+.beast-family-detail-section {
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
+}
+
+.beast-family-detail-time strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.beast-family-detail-section > div {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* Very wide desktop: details become a right-hand drawer */
+@media (min-width: 2200px) {
+  .beast-family-detail-overlay {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 18px;
+    background: rgba(4, 7, 16, .22);
+  }
+
+  .beast-family-detail-panel {
+    width: 390px;
+    max-height: none;
+    height: calc(100dvh - 36px);
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 700px) {
+  .beast-family-detail-time {
+    grid-template-columns: 1fr;
+  }
+
+  .beast-family-detail-head,
+  .beast-family-detail-body {
+    padding-inline: 16px;
+  }
+}

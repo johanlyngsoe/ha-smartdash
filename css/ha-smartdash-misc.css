@@ -3709,7 +3709,7 @@
 
 .beast-family-row {
   display: grid;
-  grid-template-columns: 84px repeat(4, minmax(0, 1fr));
+  grid-template-columns: 84px minmax(0, 1fr);
   min-height: 66px;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
@@ -3764,11 +3764,47 @@
 }
 
 .beast-family-day-content {
-  display: contents;
+  min-width: 0;
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  align-content: start;
+
+  /* Permanente personkolonner uafhængigt af om der er events */
+  background-image:
+    linear-gradient(
+      to right,
+      transparent calc(25% - 0.5px),
+      var(--border) calc(25% - 0.5px),
+      var(--border) calc(25% + 0.5px),
+      transparent calc(25% + 0.5px)
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 0.5px),
+      var(--border) calc(50% - 0.5px),
+      var(--border) calc(50% + 0.5px),
+      transparent calc(50% + 0.5px)
+    ),
+    linear-gradient(
+      to right,
+      transparent calc(75% - 0.5px),
+      var(--border) calc(75% - 0.5px),
+      var(--border) calc(75% + 0.5px),
+      transparent calc(75% + 0.5px)
+    );
 }
 
-.beast-family-person-row {
-  display: contents;
+.beast-family-event-slot {
+  min-width: 0;
+  padding: 7px;
+}
+
+.beast-family-event-slot.is-shared {
+  grid-column: 1 / -1;
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+  border-bottom: 1px solid var(--border);
 }
 
 .beast-family-cell {
@@ -3785,7 +3821,7 @@
 }
 
 .beast-family-shared {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -3829,7 +3865,7 @@
   }
 
   .beast-family-row {
-    grid-template-columns: 66px repeat(4, minmax(125px, 1fr));
+    grid-template-columns: 66px minmax(500px, 1fr);
   }
 
   #beastFamilyPlanner {
@@ -3894,4 +3930,56 @@
   font-weight: 850;
   letter-spacing: .02em;
   white-space: nowrap;
+}
+
+/* Multi-day events render as one continuous visual block */
+.beast-family-event.is-start {
+  margin-bottom: -8px;
+  padding-bottom: 14px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: transparent;
+}
+
+.beast-family-event.is-middle {
+  min-height: 26px;
+  margin-top: -8px;
+  margin-bottom: -8px;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 0;
+}
+
+.beast-family-event.is-end {
+  margin-top: -8px;
+  padding-top: 14px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-color: transparent;
+}
+
+.beast-family-event-end {
+  color: var(--ink-muted);
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* Personal events on the same part of a day share one four-column band */
+.beast-family-person-band {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.beast-family-person-band .beast-family-event-slot {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+
+/* Multi-day events: keep context visible on intermediate days */
+.beast-family-event-middle-title {
+  opacity: 0.58;
+  font-weight: 650 !important;
 }

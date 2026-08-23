@@ -367,31 +367,44 @@
     return date.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
-  async function loadFamilyCalendarEvents() {
+  async function loadFamilyCalendarEvents(onUpdate) {
     const start = new Date();
     const end = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
     const allStates = BeastHaSocket.getAllStates();
     const availableCalendars = familyCalendarIds().filter((id) => allStates.has(id));
+    const collected = [];
 
-    const results = await Promise.all(availableCalendars.map(async (id) => {
+    const publish = () => {
+      const sorted = collected
+        .filter((event) => Boolean(event.start?.dateTime || event.start?.date))
+        .sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date));
+
+      if (typeof onUpdate === "function") onUpdate([...sorted]);
+      return sorted;
+    };
+
+    if (!availableCalendars.length) {
+      publish();
+      return [];
+    }
+
+    await Promise.allSettled(availableCalendars.map(async (id) => {
       try {
         const events = await BeastAuth.haFetch(`/api/calendars/${id}?start=${start.toISOString()}&end=${end.toISOString()}`);
-        return (events || []).map((event) => ({
+
+        collected.push(...(events || []).map((event) => ({
           ...event,
           calendarId: id,
           owners: familyCalendarOwners(id)
-        }));
+        })));
+
+        publish();
       } catch (error) {
-        return [];
+        console.warn("Family calendar source failed:", id, error);
       }
     }));
 
-    return results.flat()
-      .filter((event) => {
-        const startValue = event.start?.dateTime || event.start?.date;
-        return Boolean(startValue);
-      })
-      .sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date));
+    return publish();
   }
 
   async function loadCalendarEvents() {
@@ -445,8 +458,37 @@
     const dayKey = (date) =>
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-    const eventDayKey = (event) =>
-      String(event.start?.dateTime || event.start?.date || "").slice(0, 10);
+    const eventOccursOnDay = (event, day) => {
+      const localDayKey =
+        `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+
+      // All-day calendar events use an exclusive end date:
+      // start 2026-08-25 / end 2026-08-26 means only August 25.
+      if (event.start?.date) {
+        const startKey = String(event.start.date).slice(0, 10);
+        const endKey = event.end?.date
+          ? String(event.end.date).slice(0, 10)
+          : null;
+
+        return localDayKey >= startKey && (!endKey || localDayKey < endKey);
+      }
+
+      const startValue = event.start?.dateTime;
+      if (!startValue) return false;
+
+      const dayStart = new Date(day);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const eventStart = new Date(startValue);
+      const eventEnd = event.end?.dateTime
+        ? new Date(event.end.dateTime)
+        : new Date(eventStart.getTime() + 1);
+
+      return eventStart < dayEnd && eventEnd > dayStart;
+    };
 
     const isoWeekNumber = (date) => {
       const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -456,14 +498,77 @@
       return Math.ceil((((utc - yearStart) / 86400000) + 1) / 7);
     };
 
-    const eventMarkup = (event) => {
-      const start = event.start?.dateTime || event.start?.date;
-      const allDay = !event.start?.dateTime;
-      const date = new Date(start);
-      const time = allDay ? "" : date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
-      return `<div class="beast-family-event">
-        ${time ? `<time>${escapeHtml(time)}</time>` : ""}
-        <span>${escapeHtml(event.summary || t("Uden titel", "Untitled"))}</span>
+    const eventSegmentInfo = (event, day) => {
+      const dayStart = new Date(day);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const allDay = Boolean(event.start?.date);
+
+      let eventStart;
+      let eventEnd;
+
+      if (allDay) {
+        const [sy, sm, sd] = String(event.start.date).split("-").map(Number);
+        eventStart = new Date(sy, sm - 1, sd);
+
+        if (event.end?.date) {
+          const [ey, em, ed] = String(event.end.date).split("-").map(Number);
+          eventEnd = new Date(ey, em - 1, ed);
+        } else {
+          eventEnd = new Date(eventStart);
+          eventEnd.setDate(eventEnd.getDate() + 1);
+        }
+      } else {
+        eventStart = new Date(event.start?.dateTime);
+        eventEnd = event.end?.dateTime
+          ? new Date(event.end.dateTime)
+          : new Date(eventStart.getTime() + 1);
+      }
+
+      const startsToday = eventStart >= dayStart && eventStart < dayEnd;
+      const endsToday = eventEnd > dayStart && eventEnd <= dayEnd;
+
+      const spansBefore = eventStart < dayStart;
+      const spansAfter = eventEnd > dayEnd;
+
+      let segment = "single";
+      if (!startsToday && spansAfter) segment = "middle";
+      else if (startsToday && spansAfter) segment = "start";
+      else if (spansBefore && endsToday) segment = "end";
+
+      return {
+        segment,
+        allDay,
+        eventStart,
+        eventEnd
+      };
+    };
+
+    const eventMarkup = (event, day) => {
+      const info = eventSegmentInfo(event, day);
+      const title = escapeHtml(event.summary || t("Uden titel", "Untitled"));
+
+      const startTime = info.allDay
+        ? ""
+        : info.eventStart.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+
+      const endTime = info.allDay
+        ? ""
+        : info.eventEnd.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+
+      const showTitle = info.segment === "single" || info.segment === "start";
+      const showMiddleTitle = info.segment === "middle";
+      const showStart = !info.allDay && (info.segment === "single" || info.segment === "start");
+      const showEnd = !info.allDay && info.segment === "end";
+
+      return `<div class="beast-family-event is-${info.segment}">
+        ${showStart ? `<time>${escapeHtml(startTime)}</time>` : ""}
+        ${showTitle ? `<span>${title}</span>` : ""}
+        ${showMiddleTitle ? `<span class="beast-family-event-middle-title">${title}</span>` : ""}
+        ${showEnd ? `<span class="beast-family-event-end">${t("til", "until")} ${escapeHtml(endTime)}</span>` : ""}
       </div>`;
     };
 
@@ -471,13 +576,57 @@
       const day = new Date(today);
       day.setDate(today.getDate() + offset);
       const key = dayKey(day);
-      const dayEvents = events.filter((event) => eventDayKey(event) === key);
+      const dayEvents = events
+        .filter((event) => eventOccursOnDay(event, day))
+        .sort((a, b) => {
+          const aStart = new Date(a.start?.dateTime || a.start?.date || 0).getTime();
+          const bStart = new Date(b.start?.dateTime || b.start?.date || 0).getTime();
+          return aStart - bStart;
+        });
 
-      const shared = dayEvents.filter((event) => (event.owners || []).includes("shared"));
-      const personCells = people.map(([personKey]) => {
-        const personEvents = dayEvents.filter((event) => (event.owners || []).includes(personKey));
-        return `<div class="beast-family-cell">${personEvents.map(eventMarkup).join("")}</div>`;
-      }).join("");
+      const eventRows = [];
+      let personalBand = [];
+
+      const flushPersonalBand = () => {
+        if (!personalBand.length) return;
+
+        const columns = people.map(([personKey]) => {
+          const personEvents = personalBand
+            .filter((event) => (event.owners || []).includes(personKey))
+            .sort((a, b) => {
+              const aStart = new Date(a.start?.dateTime || a.start?.date || 0).getTime();
+              const bStart = new Date(b.start?.dateTime || b.start?.date || 0).getTime();
+              return aStart - bStart;
+            });
+
+          return `<div class="beast-family-event-slot">
+            ${personEvents.map((event) => eventMarkup(event, day)).join("")}
+          </div>`;
+        }).join("");
+
+        eventRows.push(`<div class="beast-family-person-band">${columns}</div>`);
+        personalBand = [];
+      };
+
+      dayEvents.forEach((event) => {
+        const owners = event.owners || [];
+        const isShared = owners.includes("shared");
+
+        if (isShared) {
+          flushPersonalBand();
+
+          eventRows.push(`<div class="beast-family-event-slot is-shared">
+            ${eventMarkup(event, day)}
+          </div>`);
+          return;
+        }
+
+        personalBand.push(event);
+      });
+
+      flushPersonalBand();
+
+      const eventRowsMarkup = eventRows.join("");
 
       return `<div class="beast-family-row${offset === 0 ? " is-today" : ""}">
         <div class="beast-family-date">
@@ -489,8 +638,7 @@
           <span>${day.toLocaleDateString(locale, { month: "short" }).replace(".", "")}</span>
         </div>
         <div class="beast-family-day-content">
-          ${shared.length ? `<div class="beast-family-shared">${shared.map(eventMarkup).join("")}</div>` : ""}
-          <div class="beast-family-person-row">${personCells}</div>
+          ${eventRowsMarkup}
         </div>
       </div>`;
     }).join("");
@@ -569,9 +717,11 @@
       </section>
     `;
 
-    loadFamilyCalendarEvents()
-      .then((familyEvents) => renderFamilyPlanner(familyEvents || []))
-      .catch(() => renderFamilyPlanner([]));
+    renderFamilyPlanner([]);
+
+    loadFamilyCalendarEvents((familyEvents) => {
+      renderFamilyPlanner(familyEvents || []);
+    }).catch(() => renderFamilyPlanner([]));
   }
 
   function wireScheduleNav() {

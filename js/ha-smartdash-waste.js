@@ -39,6 +39,21 @@
   let familyCalendarView = "upcoming";
   let familyCalendarMonth = new Date().getMonth();
   let familyCalendarYear = new Date().getFullYear();
+
+  const FAMILY_BIRTHDAYS_STORAGE_KEY = "ha-smartdash-family-show-birthdays";
+  const FAMILY_BIRTHDAY_CALENDAR = "calendar.fodselsdage";
+
+  let familyShowBirthdays = (() => {
+    try {
+      return localStorage.getItem(FAMILY_BIRTHDAYS_STORAGE_KEY) !== "false";
+    } catch (_) {
+      return true;
+    }
+  })();
+
+  let latestFamilyEvents = [];
+  let latestBirthdayEvents = [];
+
   const familyEventLookup = new Map();
   let selectedCalendarDay = "all";
   // One card per configured schedule calendar (e.g. one per child) -- each
@@ -439,6 +454,31 @@
     return publish();
   }
 
+  async function loadFamilyBirthdayEvents() {
+    if (!familyShowBirthdays) return [];
+
+    const { start, end } = familyCalendarRange();
+    const allStates = BeastHaSocket.getAllStates();
+
+    if (!allStates.has(FAMILY_BIRTHDAY_CALENDAR)) return [];
+
+    try {
+      const events = await BeastAuth.haFetch(
+        `/api/calendars/${FAMILY_BIRTHDAY_CALENDAR}?start=${start.toISOString()}&end=${end.toISOString()}`
+      );
+
+      return (events || []).map((event) => ({
+        ...event,
+        calendarId: FAMILY_BIRTHDAY_CALENDAR,
+        owners: [],
+        familyEventType: "birthday"
+      }));
+    } catch (error) {
+      console.warn("Birthday calendar source failed:", error);
+      return [];
+    }
+  }
+
   async function loadCalendarEvents() {
     const requestId = ++calendarRequest;
     const start = new Date();
@@ -649,6 +689,13 @@
             data-family-view="month">
             ${t("Måned", "Month")}
           </button>
+
+          <label class="beast-family-birthday-toggle">
+            <input type="checkbox"
+              data-family-show-birthdays
+              ${familyShowBirthdays ? "checked" : ""}>
+            <span>${t("Vis fødselsdage", "Show birthdays")}</span>
+          </label>
         </div>
 
         <div class="beast-family-month-navigation${familyCalendarView === "month" ? " is-visible" : ""}">
@@ -701,6 +748,19 @@
 
         render();
       });
+    });
+
+    host.querySelector("[data-family-show-birthdays]")?.addEventListener("change", (event) => {
+      familyShowBirthdays = Boolean(event.target.checked);
+
+      try {
+        localStorage.setItem(
+          FAMILY_BIRTHDAYS_STORAGE_KEY,
+          familyShowBirthdays ? "true" : "false"
+        );
+      } catch (_) {}
+
+      render();
     });
 
     host.querySelectorAll("[data-family-month-step]").forEach((button) => {
@@ -849,6 +909,20 @@
       };
     };
 
+    const birthdayName = (event) => {
+      return String(event.summary || "")
+        .replace(/s fødselsdag$/i, "")
+        .replace(/ fødselsdag$/i, "")
+        .trim();
+    };
+
+    const birthdayMarkup = (event) => `
+      <div class="beast-family-birthday">
+        <span class="beast-family-dannebrog" aria-hidden="true"></span>
+        <span>${escapeHtml(birthdayName(event))}</span>
+      </div>
+    `;
+
     const eventMarkup = (event, day) => {
       const info = eventSegmentInfo(event, day);
       const title = escapeHtml(event.summary || t("Uden titel", "Untitled"));
@@ -882,7 +956,7 @@
       const day = new Date(rangeStart);
       day.setDate(rangeStart.getDate() + offset);
       const key = dayKey(day);
-      const dayEvents = events
+      const allDayEvents = events
         .filter((event) => eventOccursOnDay(event, day))
         .sort((a, b) => {
           const aStart = new Date(a.start?.dateTime || a.start?.date || 0).getTime();
@@ -890,7 +964,28 @@
           return aStart - bStart;
         });
 
+      const birthdayEvents = allDayEvents.filter(
+        (event) => event.familyEventType === "birthday"
+      );
+
+      const dayEvents = allDayEvents.filter(
+        (event) => event.familyEventType !== "birthday"
+      );
+
       const eventRows = [];
+
+      if (birthdayEvents.length) {
+        eventRows.push(`
+          <div class="beast-family-birthday-band">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div class="beast-family-birthday-column">
+              ${birthdayEvents.map(birthdayMarkup).join("")}
+            </div>
+          </div>
+        `);
+      }
       let personalBand = [];
 
       const flushPersonalBand = () => {
@@ -1034,11 +1129,29 @@
       </section>
     `;
 
-    renderFamilyPlanner([]);
+    latestFamilyEvents = [];
+    latestBirthdayEvents = [];
+
+    const publishFamilyPlanner = () => {
+      renderFamilyPlanner([
+        ...latestFamilyEvents,
+        ...latestBirthdayEvents
+      ]);
+    };
+
+    publishFamilyPlanner();
 
     loadFamilyCalendarEvents((familyEvents) => {
-      renderFamilyPlanner(familyEvents || []);
-    }).catch(() => renderFamilyPlanner([]));
+      latestFamilyEvents = familyEvents || [];
+      publishFamilyPlanner();
+    }).catch(() => {});
+
+    loadFamilyBirthdayEvents()
+      .then((birthdayEvents) => {
+        latestBirthdayEvents = birthdayEvents || [];
+        publishFamilyPlanner();
+      })
+      .catch(() => {});
   }
 
   function wireScheduleNav() {

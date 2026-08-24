@@ -4393,3 +4393,180 @@
     z-index: 5;
   }
 }
+
+/* Family Planner - optional birthday layer */
+.beast-family-birthday-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 9px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.beast-family-birthday-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.beast-family-birthday-band {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.beast-family-birthday-column {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 2px 7px 3px;
+}
+
+.beast-family-birthday {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.beast-family-birthday > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beast-family-birthday-flag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+}
+
+@media (orientation: portrait) and (max-width: 1400px) {
+  .beast-family-view-switch {
+    flex-wrap: wrap;
+  }
+
+  .beast-family-birthday-toggle {
+    flex: 0 0 100%;
+    min-height: 26px;
+    padding-inline: 2px;
+  }
+
+  .beast-family-birthday-column {
+    padding-inline: 5px;
+  }
+}
+
+/* Family Planner - optional birthday layer */
+.beast-family-birthday-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 9px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.beast-family-birthday-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.beast-family-birthday-band {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.beast-family-birthday-column {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 2px 7px 3px;
+}
+
+.beast-family-birthday {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.beast-family-birthday > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Actual CSS-drawn Danish flag — no platform emoji dependency */
+.beast-family-dannebrog {
+  position: relative;
+  width: 16px;
+  height: 11px;
+  flex: 0 0 16px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: #c8102e;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.14);
+}
+
+.beast-family-dannebrog::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: #fff;
+}
+
+.beast-family-dannebrog::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 2px;
+  background: #fff;
+}
+
+@media (orientation: portrait) and (max-width: 1400px) {
+  .beast-family-view-switch {
+    flex-wrap: wrap;
+  }
+
+  .beast-family-birthday-toggle {
+    flex: 0 0 100%;
+    min-height: 26px;
+    padding-inline: 2px;
+  }
+
+  .beast-family-birthday-column {
+    padding-inline: 5px;
+  }
+}

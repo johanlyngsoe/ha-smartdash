@@ -4192,3 +4192,102 @@
     padding-inline: 16px;
   }
 }
+
+/* Lyngsoe Family Planner V2 - range navigation */
+.beast-family-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 10px;
+}
+
+.beast-family-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.beast-family-view-button,
+.beast-family-go-button {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.beast-family-view-button.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface-solid));
+  color: var(--accent);
+}
+
+.beast-family-month-navigation {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.beast-family-month-navigation.is-visible {
+  display: flex;
+}
+
+.beast-family-month-navigation select {
+  min-height: 34px;
+  padding: 5px 28px 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.beast-family-go-button {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .beast-family-navigation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .beast-family-month-navigation {
+    justify-content: flex-start;
+  }
+}
+
+/* Lyngsoe Family Planner V2 - previous / next month */
+.beast-family-month-step {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-solid) 90%, transparent);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.beast-family-month-step:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface-solid));
+  color: var(--accent);
+}

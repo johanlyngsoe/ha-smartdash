@@ -35,6 +35,10 @@
 
   let containerEl = null;
   let calendarRequest = 0;
+
+  let familyCalendarView = "upcoming";
+  let familyCalendarMonth = new Date().getMonth();
+  let familyCalendarYear = new Date().getFullYear();
   const familyEventLookup = new Map();
   let selectedCalendarDay = "all";
   // One card per configured schedule calendar (e.g. one per child) -- each
@@ -368,9 +372,36 @@
     return date.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
-  async function loadFamilyCalendarEvents(onUpdate) {
+  function familyCalendarRange() {
+    if (familyCalendarView === "month") {
+      const start = new Date(familyCalendarYear, familyCalendarMonth, 1);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(familyCalendarYear, familyCalendarMonth + 1, 1);
+      end.setHours(0, 0, 0, 0);
+
+      return {
+        start,
+        end,
+        days: new Date(familyCalendarYear, familyCalendarMonth + 1, 0).getDate()
+      };
+    }
+
     const start = new Date();
-    const end = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 21);
+
+    return {
+      start,
+      end,
+      days: 21
+    };
+  }
+
+  async function loadFamilyCalendarEvents(onUpdate) {
+    const { start, end } = familyCalendarRange();
     const allStates = BeastHaSocket.getAllStates();
     const availableCalendars = familyCalendarIds().filter((id) => allStates.has(id));
     const collected = [];
@@ -589,6 +620,123 @@
     });
   }
 
+  function familyCalendarNavigationMarkup() {
+    const locale = window.HASmartdashI18n?.locale || "da-DK";
+    const now = new Date();
+
+    const months = Array.from({ length: 12 }, (_, month) => {
+      const label = new Date(2026, month, 1).toLocaleDateString(locale, { month: "long" });
+      const display = label.charAt(0).toUpperCase() + label.slice(1);
+      return `<option value="${month}" ${month === familyCalendarMonth ? "selected" : ""}>${escapeHtml(display)}</option>`;
+    }).join("");
+
+    const currentYear = now.getFullYear();
+    const years = Array.from({ length: 9 }, (_, index) => currentYear - 2 + index)
+      .map((year) => `<option value="${year}" ${year === familyCalendarYear ? "selected" : ""}>${year}</option>`)
+      .join("");
+
+    return `
+      <div class="beast-family-navigation">
+        <div class="beast-family-view-switch">
+          <button type="button"
+            class="beast-family-view-button${familyCalendarView === "upcoming" ? " is-active" : ""}"
+            data-family-view="upcoming">
+            ${t("Kommende 3 uger", "Next 3 weeks")}
+          </button>
+
+          <button type="button"
+            class="beast-family-view-button${familyCalendarView === "month" ? " is-active" : ""}"
+            data-family-view="month">
+            ${t("Måned", "Month")}
+          </button>
+        </div>
+
+        <div class="beast-family-month-navigation${familyCalendarView === "month" ? " is-visible" : ""}">
+          <button type="button"
+            class="beast-family-month-step"
+            data-family-month-step="-1"
+            aria-label="${t("Forrige måned", "Previous month")}">
+            ←
+          </button>
+
+          <select data-family-month aria-label="${t("Måned", "Month")}">
+            ${months}
+          </select>
+
+          <select data-family-year aria-label="${t("År", "Year")}">
+            ${years}
+          </select>
+
+          <button type="button" class="beast-family-go-button" data-family-go>
+            ${t("Gå til", "Go")}
+          </button>
+
+          <button type="button"
+            class="beast-family-month-step"
+            data-family-month-step="1"
+            aria-label="${t("Næste måned", "Next month")}">
+            →
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function wireFamilyCalendarNavigation() {
+    const host = document.getElementById("beastFamilyPlanner");
+    if (!host) return;
+
+    host.querySelectorAll("[data-family-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextView = button.dataset.familyView;
+        if (!nextView || nextView === familyCalendarView) return;
+
+        familyCalendarView = nextView;
+
+        if (nextView === "month") {
+          const now = new Date();
+          familyCalendarMonth = now.getMonth();
+          familyCalendarYear = now.getFullYear();
+        }
+
+        render();
+      });
+    });
+
+    host.querySelectorAll("[data-family-month-step]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const step = Number(button.dataset.familyMonthStep) || 0;
+        if (!step) return;
+
+        const target = new Date(
+          familyCalendarYear,
+          familyCalendarMonth + step,
+          1
+        );
+
+        familyCalendarMonth = target.getMonth();
+        familyCalendarYear = target.getFullYear();
+        familyCalendarView = "month";
+
+        render();
+      });
+    });
+
+    host.querySelector("[data-family-go]")?.addEventListener("click", () => {
+      const month = Number(host.querySelector("[data-family-month]")?.value);
+      const year = Number(host.querySelector("[data-family-year]")?.value);
+
+      if (!Number.isInteger(month) || month < 0 || month > 11) return;
+      if (!Number.isInteger(year)) return;
+
+      familyCalendarMonth = month;
+      familyCalendarYear = year;
+      familyCalendarView = "month";
+
+      render();
+    });
+  }
+
   function renderFamilyPlanner(events) {
     const host = document.getElementById("beastFamilyPlanner");
     if (!host) return;
@@ -607,8 +755,7 @@
       ["johan", "Johan"]
     ];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const { start: rangeStart, days: rangeDays } = familyCalendarRange();
 
     const dayKey = (date) =>
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -731,9 +878,9 @@
       </button>`;
     };
 
-    const rows = Array.from({ length: 21 }, (_, offset) => {
-      const day = new Date(today);
-      day.setDate(today.getDate() + offset);
+    const rows = Array.from({ length: rangeDays }, (_, offset) => {
+      const day = new Date(rangeStart);
+      day.setDate(rangeStart.getDate() + offset);
       const key = dayKey(day);
       const dayEvents = events
         .filter((event) => eventOccursOnDay(event, day))
@@ -803,12 +950,15 @@
     }).join("");
 
     host.innerHTML = `
+      ${familyCalendarNavigationMarkup()}
       <div class="beast-family-header">
         <div></div>
         ${people.map(([, label]) => `<strong>${escapeHtml(label)}</strong>`).join("")}
       </div>
       <div class="beast-family-grid">${rows}</div>
     `;
+
+    wireFamilyCalendarNavigation();
 
     host.onclick = (clickEvent) => {
       const eventButton = clickEvent.target.closest("[data-family-event-key]");

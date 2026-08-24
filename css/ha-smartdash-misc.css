@@ -4291,3 +4291,105 @@
   background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface-solid));
   color: var(--accent);
 }
+
+/* Lyngsoe Family Planner V2.1 - portrait layout */
+@media (orientation: portrait) and (max-width: 1400px) {
+
+  /* Use the full portrait viewport */
+  .beast-family-calendar-page {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .beast-family-calendar-page #beastFamilyPlanner {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Slightly narrower date column gives the family more room */
+  .beast-family-header {
+    grid-template-columns: 64px repeat(4, minmax(0, 1fr));
+  }
+
+  .beast-family-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .beast-family-date {
+    padding-inline: 6px;
+  }
+
+  .beast-family-date strong {
+    font-size: 19px;
+  }
+
+  /* Keep all four people visible instead of turning the calendar into a list */
+  .beast-family-person-band {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .beast-family-cell,
+  .beast-family-event-slot {
+    padding-inline: 5px;
+  }
+
+  .beast-family-event {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .beast-family-event time {
+    font-size: 9px;
+  }
+
+  .beast-family-event span {
+    font-size: 10px;
+  }
+
+  /* Navigation gets its own compact two-line layout */
+  .beast-family-navigation {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .beast-family-view-switch {
+    width: 100%;
+  }
+
+  .beast-family-view-button {
+    flex: 1 1 0;
+    min-height: 40px;
+  }
+
+  .beast-family-month-navigation {
+    width: 100%;
+    grid-template-columns: 44px minmax(0, 1fr) auto auto 44px;
+    gap: 6px;
+  }
+
+  .beast-family-month-navigation.is-visible {
+    display: grid;
+  }
+
+  .beast-family-month-navigation select,
+  .beast-family-go-button {
+    min-height: 42px;
+  }
+
+  .beast-family-month-step {
+    width: 44px;
+    min-width: 44px;
+    height: 42px;
+    font-size: 18px;
+  }
+
+  /* Sticky person header remains useful while scrolling a long month */
+  .beast-family-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+}

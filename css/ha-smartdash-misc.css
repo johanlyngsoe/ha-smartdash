@@ -3891,7 +3891,9 @@
 
 /* Lyngsoe Family Planner - standalone Calendar page */
 .beast-family-calendar-page {
+  grid-column: 1 / -1;
   width: 100%;
+  min-width: 0;
   min-height: 0;
   height: calc(100dvh - (2 * var(--space-5)));
   overflow: hidden;

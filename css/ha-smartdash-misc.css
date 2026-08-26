@@ -4570,3 +4570,45 @@
     padding-inline: 5px;
   }
 }
+
+/* Family Planner - weekends, public holidays and special days */
+.beast-family-row.is-day-off {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, #000 13%, var(--surface-solid)),
+      color-mix(in srgb, #000 8%, var(--surface-solid))
+    );
+}
+
+.beast-family-row.is-day-off .beast-family-date {
+  background: color-mix(in srgb, #000 8%, transparent);
+}
+
+/* Public holidays get a tiny extra accent without becoming loud */
+.beast-family-row.is-public-holiday .beast-family-date strong {
+  color: color-mix(in srgb, var(--warning) 72%, var(--ink));
+}
+
+.beast-family-day-labels {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  margin-top: 3px;
+}
+
+.beast-family-day-labels em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.beast-family-row.is-public-holiday .beast-family-day-labels em {
+  color: color-mix(in srgb, var(--warning) 62%, var(--ink-muted));
+}

@@ -41,7 +41,10 @@
   let familyCalendarYear = new Date().getFullYear();
 
   const FAMILY_BIRTHDAYS_STORAGE_KEY = "ha-smartdash-family-show-birthdays";
-  const FAMILY_BIRTHDAY_CALENDAR = "calendar.fodselsdage";
+  const FAMILY_BIRTHDAY_CALENDARS = [
+    { entityId: "calendar.fodselsdage", owner: "johan" },
+    { entityId: "calendar.christina_fodselsdage", owner: "christina" }
+  ];
 
   let familyShowBirthdays = (() => {
     try {
@@ -51,8 +54,11 @@
     }
   })();
 
+  const FAMILY_HOLIDAY_CALENDAR = "calendar.helligdage_i_danmark";
+
   let latestFamilyEvents = [];
   let latestBirthdayEvents = [];
+  let latestHolidayEvents = [];
 
   const familyEventLookup = new Map();
   let selectedCalendarDay = "all";
@@ -460,21 +466,51 @@
     const { start, end } = familyCalendarRange();
     const allStates = BeastHaSocket.getAllStates();
 
-    if (!allStates.has(FAMILY_BIRTHDAY_CALENDAR)) return [];
+    const availableCalendars = FAMILY_BIRTHDAY_CALENDARS.filter(
+      ({ entityId }) => allStates.has(entityId)
+    );
+
+    const results = await Promise.allSettled(
+      availableCalendars.map(async ({ entityId, owner }) => {
+        const events = await BeastAuth.haFetch(
+          `/api/calendars/${entityId}?start=${start.toISOString()}&end=${end.toISOString()}`
+        );
+
+        return (events || []).map((event) => ({
+          ...event,
+          calendarId: entityId,
+          owners: [owner],
+          familyEventType: "birthday"
+        }));
+      })
+    );
+
+    return results.flatMap((result) => {
+      if (result.status === "fulfilled") return result.value;
+      console.warn("Birthday calendar source failed:", result.reason);
+      return [];
+    });
+  }
+
+  async function loadFamilyHolidayEvents() {
+    const { start, end } = familyCalendarRange();
+    const allStates = BeastHaSocket.getAllStates();
+
+    if (!allStates.has(FAMILY_HOLIDAY_CALENDAR)) return [];
 
     try {
       const events = await BeastAuth.haFetch(
-        `/api/calendars/${FAMILY_BIRTHDAY_CALENDAR}?start=${start.toISOString()}&end=${end.toISOString()}`
+        `/api/calendars/${FAMILY_HOLIDAY_CALENDAR}?start=${start.toISOString()}&end=${end.toISOString()}`
       );
 
       return (events || []).map((event) => ({
         ...event,
-        calendarId: FAMILY_BIRTHDAY_CALENDAR,
-        owners: [],
-        familyEventType: "birthday"
+        calendarId: FAMILY_HOLIDAY_CALENDAR,
+        familyEventType: "holiday",
+        isPublicHoliday: String(event.description || "").trim() === "Helligdag"
       }));
     } catch (error) {
-      console.warn("Birthday calendar source failed:", error);
+      console.warn("Holiday calendar source failed:", error);
       return [];
     }
   }
@@ -952,6 +988,63 @@
       </button>`;
     };
 
+    const easterSunday = (year) => {
+      // Anonymous Gregorian algorithm
+      const a = year % 19;
+      const b = Math.floor(year / 100);
+      const c = year % 100;
+      const d = Math.floor(b / 4);
+      const e = b % 4;
+      const f = Math.floor((b + 8) / 25);
+      const g = Math.floor((b - f + 1) / 3);
+      const h = (19 * a + b - d - g + 15) % 30;
+      const i = Math.floor(c / 4);
+      const k = c % 4;
+      const l = (32 + 2 * e + 2 * i - h - k) % 7;
+      const m = Math.floor((a + 11 * h + 22 * l) / 451);
+      const month = Math.floor((h + l - 7 * m + 114) / 31);
+      const day = ((h + l - 7 * m + 114) % 31) + 1;
+      return new Date(year, month - 1, day);
+    };
+
+    const specialDayLabels = (day) => {
+      const labels = [];
+      const year = day.getFullYear();
+      const month = day.getMonth();
+      const date = day.getDate();
+
+      // Fastelavnssøndag = 49 dage før påskedag.
+      const fastelavn = easterSunday(year);
+      fastelavn.setDate(fastelavn.getDate() - 49);
+
+      if (
+        day.getFullYear() === fastelavn.getFullYear() &&
+        month === fastelavn.getMonth() &&
+        date === fastelavn.getDate()
+      ) {
+        labels.push("Fastelavn");
+      }
+
+      if (month === 9 && date === 31) {
+        labels.push("Halloween");
+      }
+
+      // Black Friday = dagen efter den fjerde torsdag i november.
+      if (month === 10) {
+        const novemberFirst = new Date(year, 10, 1);
+        const firstThursday =
+          1 + ((4 - novemberFirst.getDay() + 7) % 7);
+        const thanksgiving = firstThursday + 21;
+        const blackFriday = thanksgiving + 1;
+
+        if (date === blackFriday) {
+          labels.push("Black Friday");
+        }
+      }
+
+      return labels;
+    };
+
     const rows = Array.from({ length: rangeDays }, (_, offset) => {
       const day = new Date(rangeStart);
       day.setDate(rangeStart.getDate() + offset);
@@ -968,21 +1061,45 @@
         (event) => event.familyEventType === "birthday"
       );
 
-      const dayEvents = allDayEvents.filter(
-        (event) => event.familyEventType !== "birthday"
+      const holidayEvents = allDayEvents.filter(
+        (event) => event.familyEventType === "holiday"
       );
+
+      const publicHolidayEvents = holidayEvents.filter(
+        (event) => event.isPublicHoliday === true
+      );
+
+      const dayEvents = allDayEvents.filter(
+        (event) =>
+          event.familyEventType !== "birthday" &&
+          event.familyEventType !== "holiday"
+      );
+
+      const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+      const isPublicHoliday = publicHolidayEvents.length > 0;
+      const specialLabels = specialDayLabels(day);
+
+      const dayLabels = [
+        ...publicHolidayEvents.map((event) => String(event.summary || "").trim()),
+        ...specialLabels
+      ].filter(Boolean);
 
       const eventRows = [];
 
       if (birthdayEvents.length) {
+        const birthdayColumns = people.map(([personKey]) => {
+          const personBirthdays = birthdayEvents.filter(
+            (event) => (event.owners || []).includes(personKey)
+          );
+
+          return `<div class="beast-family-birthday-column">
+            ${personBirthdays.map(birthdayMarkup).join("")}
+          </div>`;
+        }).join("");
+
         eventRows.push(`
           <div class="beast-family-birthday-band">
-            <div></div>
-            <div></div>
-            <div></div>
-            <div class="beast-family-birthday-column">
-              ${birthdayEvents.map(birthdayMarkup).join("")}
-            </div>
+            ${birthdayColumns}
           </div>
         `);
       }
@@ -1029,7 +1146,14 @@
 
       const eventRowsMarkup = eventRows.join("");
 
-      return `<div class="beast-family-row${offset === 0 ? " is-today" : ""}">
+      const rowClasses = [
+        offset === 0 ? "is-today" : "",
+        isWeekend ? "is-weekend" : "",
+        isPublicHoliday ? "is-public-holiday" : "",
+        (isWeekend || isPublicHoliday) ? "is-day-off" : ""
+      ].filter(Boolean).join(" ");
+
+      return `<div class="beast-family-row${rowClasses ? ` ${rowClasses}` : ""}">
         <div class="beast-family-date">
           <small>
             ${day.toLocaleDateString(locale, { weekday: "short" }).replace(".", "")}
@@ -1037,6 +1161,11 @@
           </small>
           <strong>${day.getDate()}</strong>
           <span>${day.toLocaleDateString(locale, { month: "short" }).replace(".", "")}</span>
+          ${dayLabels.length ? `
+            <div class="beast-family-day-labels">
+              ${dayLabels.map((label) => `<em>${escapeHtml(label)}</em>`).join("")}
+            </div>
+          ` : ""}
         </div>
         <div class="beast-family-day-content">
           ${eventRowsMarkup}
@@ -1118,7 +1247,14 @@
         <header class="beast-calendar-section-head">
           <span>${BeastCore.icon("calendar", { size:22 })}</span>
           <div>
-            <small>${t("De næste 3 uger", "Next 3 weeks")}</small>
+            <small>${
+              familyCalendarView === "month"
+                ? new Intl.DateTimeFormat(
+                    document.documentElement.lang?.toLowerCase().startsWith("da") ? "da-DK" : "en-GB",
+                    { month: "long", year: "numeric" }
+                  ).format(new Date(familyCalendarYear, familyCalendarMonth, 1))
+                : t("De næste 3 uger", "Next 3 weeks")
+            }</small>
             <h2>${t("Familiekalender", "Family calendar")}</h2>
           </div>
         </header>
@@ -1131,11 +1267,13 @@
 
     latestFamilyEvents = [];
     latestBirthdayEvents = [];
+    latestHolidayEvents = [];
 
     const publishFamilyPlanner = () => {
       renderFamilyPlanner([
         ...latestFamilyEvents,
-        ...latestBirthdayEvents
+        ...latestBirthdayEvents,
+        ...latestHolidayEvents
       ]);
     };
 
@@ -1149,6 +1287,13 @@
     loadFamilyBirthdayEvents()
       .then((birthdayEvents) => {
         latestBirthdayEvents = birthdayEvents || [];
+        publishFamilyPlanner();
+      })
+      .catch(() => {});
+
+    loadFamilyHolidayEvents()
+      .then((holidayEvents) => {
+        latestHolidayEvents = holidayEvents || [];
         publishFamilyPlanner();
       })
       .catch(() => {});

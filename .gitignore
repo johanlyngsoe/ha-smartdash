@@ -4,3 +4,8 @@ data/backup-settings.json
 data/backups/
 data/*.tmp
 
+# Local backups and generated runtime data
+*.bak-*
+data/update-check-cache-*.json
+data/version-snapshots/
+

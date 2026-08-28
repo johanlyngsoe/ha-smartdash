@@ -2100,3 +2100,17 @@
    and must remain usable. */
 .beast-overview-grid.is-editing .beast-ov-card .beast-chart-type,
 .beast-overview-grid.is-editing .beast-ov-card .beast-chart-type * { pointer-events: auto; }
+
+/*
+ * SmartDash kiosk performance:
+ * Chromium/Intel iGPU can continuously composite the entire Overview while
+ * any CSS animation is running. The dedicated kiosk requests reduced motion,
+ * so keep Overview static there while normal clients retain all animations.
+ */
+@media (prefers-reduced-motion: reduce) {
+  #beastOverviewZone *,
+  #beastOverviewZone *::before,
+  #beastOverviewZone *::after {
+    animation: none !important;
+  }
+}

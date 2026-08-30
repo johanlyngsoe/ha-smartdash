@@ -2,6 +2,141 @@
   overflow: hidden;
 }
 
+/* =========================================================
+   SMARTDASH FLOORPLAN
+   ========================================================= */
+
+.beast-floorplan-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(8px, 1.2vw, 18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.beast-floorplan-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--border);
+  border-radius: clamp(18px, 1.8vw, 28px);
+
+  background:
+    radial-gradient(
+      circle at 25% 18%,
+      rgba(105, 118, 255, .07),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 82% 72%,
+      rgba(47, 224, 168, .045),
+      transparent 30%
+    ),
+    var(--surface-solid, #101218);
+
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+:root[data-color-mode="light"] .beast-floorplan-stage {
+  background:
+    radial-gradient(
+      circle at 25% 18%,
+      rgba(105, 118, 255, .05),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 82% 72%,
+      rgba(47, 224, 168, .035),
+      transparent 30%
+    ),
+    #f7f9fc;
+}
+
+.beast-floorplan-vector {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.beast-floorplan-svg {
+  display: block;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  transform-origin: center center;
+  transform-box: border-box;
+  transition: transform .25s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.beast-floorplan-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.beast-floorplan-missing {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 32px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+
+.beast-floorplan-missing[hidden] {
+  display: none;
+}
+
+.beast-floorplan-missing-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  color: var(--accent-rooms);
+  background: rgba(47, 224, 168, .10);
+  border: 1px solid rgba(47, 224, 168, .18);
+}
+
+.beast-floorplan-missing strong {
+  color: var(--ink);
+  font-size: var(--text-lg);
+}
+
+.beast-floorplan-missing span {
+  font-size: var(--text-sm);
+}
+
+.beast-floorplan-missing small {
+  margin-top: 5px;
+  font-family: monospace;
+  font-size: .7rem;
+  opacity: .65;
+}
+
+
 .beast-rooms-grid {
   flex: 1;
   min-height: 0;

@@ -566,22 +566,159 @@
     window.setTimeout(() => { if (openAreaId) renderModal(); }, 300);
   }
 
+  function fitFloorplan(stage) {
+    const svg = stage?.querySelector(".beast-floorplan-svg");
+    if (!svg) return;
+
+    const roomConfig = BeastConfig.get("panels.rooms") || {};
+    const portrait = stage.clientHeight > stage.clientWidth;
+
+    // Presentation only. SVG path geometry is never modified.
+    const rotation = portrait
+      ? Number(roomConfig.floorplanPortraitRotation ?? 90)
+      : Number(roomConfig.floorplanLandscapeRotation ?? 0);
+
+    stage.classList.toggle("is-portrait", portrait);
+    stage.classList.toggle("is-landscape", !portrait);
+
+    const viewBox = svg.viewBox?.baseVal;
+    if (!viewBox || !viewBox.width || !viewBox.height) return;
+
+    const normalizedRotation = ((rotation % 360) + 360) % 360;
+    const quarterTurn = normalizedRotation === 90 || normalizedRotation === 270;
+
+    const visualWidth = quarterTurn ? viewBox.height : viewBox.width;
+    const visualHeight = quarterTurn ? viewBox.width : viewBox.height;
+
+    const padding = Math.max(
+      16,
+      Math.min(stage.clientWidth, stage.clientHeight) * 0.025
+    );
+
+    const availableWidth = Math.max(1, stage.clientWidth - padding * 2);
+    const availableHeight = Math.max(1, stage.clientHeight - padding * 2);
+
+    const scale = Math.min(
+      availableWidth / visualWidth,
+      availableHeight / visualHeight
+    );
+
+    svg.style.width = `${viewBox.width * scale}px`;
+    svg.style.height = `${viewBox.height * scale}px`;
+    svg.style.transform = portrait
+      ? `scaleY(-1) rotate(${rotation}deg) scaleX(-1)`
+      : `rotate(${rotation}deg)`;
+
+    stage.dataset.floorplanRotation = String(rotation);
+  }
+
+  function renderFloorplan() {
+    const roomConfig = BeastConfig.get("panels.rooms") || {};
+    const imageSrc = roomConfig.floorplanImage
+      || "/assets/floorplan-smartdash-exact-v1.1.3.svg";
+
+    let stage = containerEl.querySelector("#beastRoomsFloorplan");
+
+    if (!stage) {
+      containerEl.innerHTML = `
+        <div class="beast-floorplan-shell">
+          <div class="beast-floorplan-stage" id="beastRoomsFloorplan">
+
+            <div
+              class="beast-floorplan-vector"
+              id="beastRoomsFloorplanVector"
+            ></div>
+
+            <div
+              class="beast-floorplan-overlay"
+              id="beastRoomsFloorplanOverlay"
+            ></div>
+
+            <div
+              class="beast-floorplan-missing"
+              id="beastRoomsFloorplanMissing"
+              hidden
+            >
+              <span class="beast-floorplan-missing-icon">
+                ${BeastCore.icon("home", { size: 34 })}
+              </span>
+              <strong>SmartDash floorplan</strong>
+              <span>Kunne ikke hente plantegningen.</span>
+              <small>${escapeHtml(imageSrc)}</small>
+            </div>
+
+          </div>
+        </div>
+
+        <div id="beastRoomModalHost"></div>
+      `;
+
+      stage = containerEl.querySelector("#beastRoomsFloorplan");
+
+      const vectorHost = containerEl.querySelector("#beastRoomsFloorplanVector");
+      const missing = containerEl.querySelector("#beastRoomsFloorplanMissing");
+
+      fetch(imageSrc, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((svgText) => {
+          const parser = new DOMParser();
+          const svgDocument = parser.parseFromString(svgText, "image/svg+xml");
+          const svg = svgDocument.documentElement;
+
+          if (
+            !svg ||
+            svg.localName !== "svg" ||
+            svgDocument.querySelector("parsererror")
+          ) {
+            throw new Error("Ugyldig SVG");
+          }
+
+          // Keep the master geometry intact.
+          svg.classList.add("beast-floorplan-svg");
+          svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+          svg.removeAttribute("width");
+          svg.removeAttribute("height");
+
+          vectorHost.replaceChildren(document.importNode(svg, true));
+
+          stage.classList.add("has-floorplan");
+          missing.hidden = true;
+
+          fitFloorplan(stage);
+
+          if (window.ResizeObserver) {
+            const observer = new ResizeObserver(() => fitFloorplan(stage));
+            observer.observe(stage);
+            stage._floorplanResizeObserver = observer;
+          }
+        })
+        .catch((error) => {
+          console.error("SmartDash floorplan load failed:", error);
+          missing.hidden = false;
+          stage.classList.remove("has-floorplan");
+        });
+    } else {
+      fitFloorplan(stage);
+    }
+  }
+
   function render() {
     if (!containerEl) return;
     if (!BeastRegistry.isLoaded()) {
       containerEl.innerHTML = `<p class="beast-panel-title">Rum</p><p class="beast-music-empty">Henter rum…</p>`;
       return;
     }
-    const currentGrid = containerEl.querySelector(".beast-rooms-grid");
-    if (currentGrid) savedGridScrollTop = currentGrid.scrollTop;
     const currentModalBody = containerEl.querySelector(".beast-modal-body");
     if (currentModalBody) savedModalScrollTop = currentModalBody.scrollTop;
-    renderGrid();
+
+    renderFloorplan();
+
     if (openAreaId) renderModal();
-    window.requestAnimationFrame(() => {
-      const nextGrid = containerEl.querySelector(".beast-rooms-grid");
-      if (nextGrid) nextGrid.scrollTop = savedGridScrollTop;
-    });
   }
 
   const ROOM_RELEVANT_DOMAINS = ["light", "climate", "sensor", "binary_sensor", "cover", "lock", "switch"];

@@ -1461,6 +1461,7 @@
           ${BeastCore.statTile({ icon: "grid", label: "Entities i cache", value: String(BeastHaSocket.getAllStates().size), id: "adminCountTile" })}
         </div></div>
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>${t("Flydende musikafspiller", "Floating music player")}</h2><p>${t("Viser en lille afspiller-boks på forsiden mens der spilles musik. Gælder kun denne enhed/browser, ikke andre kiosker.", "Shows a small player box on the front page while music is playing. Applies only to this device/browser, not other kiosks.")}</p></div></div><div class="beast-stat-tile-actions"><button type="button" class="beast-security-action-btn${floatingPlayerOn ? " is-disarm" : ""}" id="adminSettingsFloatingPlayerBtn">${floatingPlayerOn ? t("Slå fra på denne enhed", "Turn off on this device") : t("Slå til på denne enhed", "Turn on on this device")}</button></div></div>
+        <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>${t("Skærmtastatur", "On-screen keyboard")}</h2><p>${t("Viser automatisk et touch-tastatur ved tekst- og søgefelter på denne kiosk eller browser. Indstillingen gælder kun denne enhed.", "Automatically shows a touch keyboard for text and search fields on this kiosk or browser. The setting only applies to this device.")}</p></div></div><div class="beast-stat-tile-actions"><button type="button" class="beast-security-action-btn${BeastLocalSettings.get("virtualKeyboardEnabled", false) ? " is-disarm" : ""}" id="adminSettingsVirtualKeyboardBtn">${BeastLocalSettings.get("virtualKeyboardEnabled", false) ? t("Slå fra på denne enhed", "Turn off on this device") : t("Slå til på denne enhed", "Turn on on this device")}</button></div></div>
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>Kioskintegration</h2><p>Avanceret MQTT-styring og enhedskommandoer. Kan ignoreres på almindelige tablets.</p></div></div>${renderMqttPanel()}</div>
         <div class="admin-card admin-settings-group admin-diagnostics"><div class="admin-card-head"><div><h2>Diagnostik og session</h2><p>Seneste lokale hændelser samt mulighed for at logge Home Assistant-sessionen ud.</p></div></div><details><summary>Vis teknisk log</summary><pre class="beast-debug-log" id="adminDebugLog"></pre></details><button type="button" class="beast-btn" id="adminLogout">Log ud</button></div>
       </section>
@@ -2204,6 +2205,14 @@
       if (button.dataset.favoriteMove === "up" && row.previousElementSibling) row.parentElement.insertBefore(row, row.previousElementSibling);
       if (button.dataset.favoriteMove === "down" && row.nextElementSibling) row.parentElement.insertBefore(row.nextElementSibling, row);
     }));
+    document.getElementById("adminSettingsVirtualKeyboardBtn")?.addEventListener("click", (event) => {
+      const enabled = !BeastLocalSettings.get("virtualKeyboardEnabled", false);
+      BeastLocalSettings.set("virtualKeyboardEnabled", enabled);
+      event.currentTarget.classList.toggle("is-disarm", enabled);
+      event.currentTarget.textContent = enabled
+        ? t("Slå fra på denne enhed", "Turn off on this device")
+        : t("Slå til på denne enhed", "Turn on on this device");
+    });
     document.querySelector("[data-export-config]")?.addEventListener("click", () => downloadJson(`ha-smartdash-profile-${new Date().toISOString().slice(0,10)}.json`, portableProfile()));
     document.querySelector("[data-export-local]")?.addEventListener("click", () => downloadJson(`beast-screen-${new Date().toISOString().slice(0,10)}.json`, { type: "beast-local", version: 1, data: BeastLocalSettings.getAll() }));
     document.querySelector("[data-import-backup]")?.addEventListener("change", async (event) => {

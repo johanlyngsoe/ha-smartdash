@@ -1,5 +1,89 @@
 [
   {
+    "version": "20260901-1",
+    "tag": "v0.8.3",
+    "date": "2026-09-01",
+    "changes": [
+      {
+        "da": "Forsidens kameraområde kan nu valgfrit vise to kameraer sammen med et konfigurerbart ventilationskort med temperaturfarvet luftstrøm, varmegenvinding, bypass og eftervarme.",
+        "en": "The overview camera area can now optionally show two cameras alongside a configurable ventilation card with temperature-coloured airflow, heat recovery, bypass and afterheating."
+      },
+      {
+        "da": "Ventilationskortet tilpasser sig store og små skærme, stopper luftanimationen ved 0 RPM og respekterer browserens indstilling for reduceret bevægelse.",
+        "en": "The ventilation card adapts to large and small screens, stops airflow animation at 0 RPM and respects the browser's reduced-motion setting."
+      },
+      {
+        "da": "Luft- og blæseranimationerne kører nu lineært og bevarer deres fase ved sensoropdateringer, så bevægelsen ikke hakker eller starter forfra.",
+        "en": "Airflow and fan animations now run linearly and retain their phase across sensor updates, preventing visible stutter and restarts."
+      },
+      {
+        "da": "Varmesiden kan nu vise det responsive Wavin Calefa-fjernvarmekort med temperaturfarvede vandrør, radiator, varmt brugsvand og faktiske CVV/BVV-ventilprocenter.",
+        "en": "The heating page can now show the responsive Wavin Calefa district-heating card with temperature-coloured water pipes, radiator, domestic hot water and actual CH/DHW valve percentages."
+      },
+      {
+        "da": "Fjernvarmekortet vælger nu kun en rigtig primær reguleringsventil og undgår at vise sekundære eller beregnede ventilværdier som hovedventil.",
+        "en": "The district-heating card now selects only a real primary control valve and avoids presenting secondary or calculated valve values as the main valve."
+      },
+      {
+        "da": "Fjernvarmekortet viser nu tydeligt sommerstop, når varmeanlægget er sæsonlukket, uden at skjule status for varmt brugsvand.",
+        "en": "The district-heating card now clearly shows the summer cutoff when space heating is seasonally disabled without hiding domestic hot-water status."
+      }
+    ]
+  },
+  {
+    "version": "20260823-1",
+    "tag": "v0.8.2",
+    "date": "2026-08-23",
+    "changes": [
+      {
+        "da": "Første Stable-udgivelse der inkluderer Docker-, Unraid- og Home Assistant App-distributionerne fra de seneste Beta-udgivelser -- Docker Compose og Unraid-skabelonen følger nu det stabile 'latest'-image i stedet for 'beta'.",
+        "en": "First Stable release to include the Docker, Unraid, and Home Assistant App distributions from the recent Beta releases -- Docker Compose and the Unraid template now track the stable 'latest' image instead of 'beta'."
+      },
+      {
+        "da": "Træk- og størrelseshåndtagene på advarsels-popups (post, printer, døre/låse) er gjort væsentligt større, så de er nemme at ramme med en finger på en touchskærm -- de var kun dimensioneret til en museknap.",
+        "en": "The drag and resize handles on alert popups (mail, printer, doors/locks) have been made significantly larger so they're easy to hit with a finger on a touchscreen -- they were previously sized for a mouse cursor only."
+      }
+    ]
+  },
+  {
+    "version": "20260822-3",
+    "tag": "v0.8.1",
+    "date": "2026-08-22",
+    "changes": [
+      {
+        "da": "Home Assistant-knappen Åbn webside åbner nu Smartdash direkte på Home Assistant-maskinens IP og den valgte port i stedet for en indlejret Ingress-adresse, så OAuth-login ikke længere fejler med Invalid redirect URI.",
+        "en": "Home Assistant's Open Web UI button now opens Smartdash directly on the Home Assistant host IP and selected port instead of a nested Ingress address, preventing Invalid redirect URI errors during OAuth login."
+      }
+    ]
+  },
+  {
+    "version": "20260822-2",
+    "tag": "v0.8.0",
+    "date": "2026-08-22",
+    "changes": [
+      {
+        "da": "HA Smartdash kan nu installeres som en samlet multi-arkitektur Dockerpakke med Nginx, PHP, healthcheck og persistent /data på både amd64 og arm64.",
+        "en": "HA Smartdash can now be installed as one multi-architecture Docker package with Nginx, PHP, health monitoring, and persistent /data on both amd64 and arm64."
+      },
+      {
+        "da": "Der er tilføjet en færdig Unraid-template med valgfri ekstern port, Home Assistant-adresse og persistent appdata-mappe.",
+        "en": "A ready-made Unraid template now provides a configurable external port, Home Assistant address, and persistent appdata directory."
+      },
+      {
+        "da": "Home Assistant OS og Supervised kan installere dashboardet direkte som en App med Ingress, valgfri direkte kioskport og backup af App-data.",
+        "en": "Home Assistant OS and Supervised can now install the dashboard directly as an App with Ingress, an optional direct kiosk port, and App-data backups."
+      },
+      {
+        "da": "Containeropdateringer håndteres nu af Docker, Unraid eller Home Assistant og bevarer /data; den indbyggede filupdatering bruges fortsat kun på selvstændige webservere.",
+        "en": "Container updates are now owned by Docker, Unraid, or Home Assistant and preserve /data; the built-in file updater remains available only to standalone web servers."
+      },
+      {
+        "da": "Links, lokale API-kald, Home Assistant-proxy og WebSocket-forbindelse følger nu programmets baseadresse, så dashboard og administration virker gennem Home Assistant Ingress.",
+        "en": "Links, local API calls, the Home Assistant proxy, and WebSocket connections now follow the application base path so the dashboard and Administration work through Home Assistant Ingress."
+      }
+    ]
+  },
+  {
     "version": "20260819-29",
     "tag": "v0.7.123",
     "date": "2026-08-19",

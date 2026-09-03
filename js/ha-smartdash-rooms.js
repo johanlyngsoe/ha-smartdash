@@ -149,17 +149,52 @@
 
     const climate = roomClimate(areaId, climateIds);
 
+    let contactCount = 0;
     let openCount = 0;
     let presence = false;
+
     binarySensorIds.forEach((id) => {
       const s = BeastHaSocket.getState(id);
-      if (!s || s.state !== "on") return;
+      if (!s) return;
+
       const deviceClass = s.attributes.device_class;
-      if (DOOR_WINDOW_CLASSES.includes(deviceClass)) openCount += 1;
-      if (areaId !== "kontor" && PRESENCE_CLASSES.includes(deviceClass)) presence = true;
+
+      if (DOOR_WINDOW_CLASSES.includes(deviceClass)) {
+        const meta = BeastRegistry.getEntityMeta(id);
+        const platform = String(meta?.platform || "").toLowerCase();
+
+        // Floorplan contact V1:
+        // Only physical Verisure openings. The entity-id fallback covers
+        // current Verisure "Åbner" entities if platform metadata is absent.
+        const isVerisureContact =
+          platform === "verisure"
+          || id.toLowerCase().includes("_abner_");
+
+        if (isVerisureContact) {
+          contactCount += 1;
+          if (s.state === "on") openCount += 1;
+        }
+      }
+
+      if (
+        areaId !== "kontor"
+        && s.state === "on"
+        && PRESENCE_CLASSES.includes(deviceClass)
+      ) {
+        presence = true;
+      }
     });
 
-    return { lightIds, lightGroups, climateIds, lightsOn, ...climate, openCount, presence };
+    return {
+      lightIds,
+      lightGroups,
+      climateIds,
+      lightsOn,
+      ...climate,
+      contactCount,
+      openCount,
+      presence
+    };
   }
 
   // Any binary_sensor change anywhere in the house (a motion sensor, a
@@ -606,10 +641,112 @@
     svg.style.width = `${viewBox.width * scale}px`;
     svg.style.height = `${viewBox.height * scale}px`;
     svg.style.transform = portrait
-      ? `scaleY(-1) rotate(${rotation}deg) scaleX(-1)`
-      : `rotate(${rotation}deg)`;
+      ? `translate(-50%, -50%) scaleY(-1) rotate(${rotation}deg) scaleX(-1)`
+      : `translate(-50%, -50%) rotate(${rotation}deg)`;
 
     stage.dataset.floorplanRotation = String(rotation);
+  }
+
+  const FLOORPLAN_ROOM_POSITIONS = {
+    alrum: { x: 745, y: 316 },
+    bryggers: { x: 357, y: 316 },
+    forhave: { x: 172, y: 213 },
+    frederikkes_vaerelse: { x: 523, y: 149 },
+    gang: { x: 480, y: 238 },
+    garage: { x: 235, y: 484 },
+    have: { x: 1103, y: 279 },
+    indkorsel: { x: 26, y: 484 },
+    kontor: { x: 607, y: 316 },
+    kokken: { x: 745, y: 149 },
+    lille_badevaerelse: { x: 494, y: 316 },
+    mikkeline: { x: 382, y: 149 },
+    sovevaerelse: { x: 990, y: 180 },
+    stort_badevaerelse: { x: 875, y: 149 },
+    stue: { x: 939, y: 390 }
+  };
+
+  function floorplanPointToStage(stage, svg, x, y) {
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return null;
+
+    const point = svg.createSVGPoint();
+    point.x = x;
+    point.y = y;
+
+    const screenPoint = point.matrixTransform(matrix);
+    const stageRect = stage.getBoundingClientRect();
+
+    return {
+      left: screenPoint.x - stageRect.left,
+      top: screenPoint.y - stageRect.top
+    };
+  }
+
+  function renderFloorplanRoomLabels(stage) {
+    const svg = stage?.querySelector(".beast-floorplan-svg");
+    const overlay = stage?.querySelector("#beastRoomsFloorplanOverlay");
+    if (!stage || !svg || !overlay) return;
+
+    const visibleAreaIds = new Set(ROOM_ORDER);
+
+    overlay.querySelectorAll(".beast-floorplan-room-label").forEach((label) => {
+      if (!visibleAreaIds.has(label.dataset.areaId)) label.remove();
+    });
+
+    Object.entries(FLOORPLAN_ROOM_POSITIONS).forEach(([areaId, position]) => {
+      if (!visibleAreaIds.has(areaId)) return;
+
+      const area = BeastRegistry.getArea(areaId);
+      if (!area) return;
+
+      const point = floorplanPointToStage(stage, svg, position.x, position.y);
+      if (!point) return;
+
+      const summary = roomSummary(areaId);
+
+      let label = overlay.querySelector(
+        `.beast-floorplan-room-label[data-area-id="${CSS.escape(areaId)}"]`
+      );
+
+      if (!label) {
+        label = document.createElement("div");
+        label.className = "beast-floorplan-room-label";
+        label.dataset.areaId = areaId;
+        overlay.appendChild(label);
+      }
+
+      label.style.left = `${point.left}px`;
+      label.style.top = `${point.top}px`;
+
+      const temperatureHtml = summary.temperatureLabel === "–"
+        ? ""
+        : `<span>${escapeHtml(summary.temperatureLabel)}</span>`;
+
+      let contactHtml = "";
+      if (summary.contactCount > 0) {
+        const contactClass = summary.openCount > 0 ? "is-open" : "is-closed";
+        const contactText = summary.openCount > 0
+          ? `${summary.openCount} ${summary.openCount === 1 ? "åben" : "åbne"}`
+          : "Lukket";
+
+        contactHtml = `
+          <span class="beast-floorplan-contact-status ${contactClass}">
+            <i></i>${escapeHtml(contactText)}
+          </span>
+        `;
+      }
+
+      label.innerHTML = `
+        <strong>${escapeHtml(area.name)}</strong>
+        ${temperatureHtml}
+        ${contactHtml}
+      `;
+    });
+  }
+
+  function updateFloorplanPresentation(stage) {
+    fitFloorplan(stage);
+    requestAnimationFrame(() => renderFloorplanRoomLabels(stage));
   }
 
   function renderFloorplan() {
@@ -689,10 +826,23 @@
           stage.classList.add("has-floorplan");
           missing.hidden = true;
 
-          fitFloorplan(stage);
+          updateFloorplanPresentation(stage);
 
           if (window.ResizeObserver) {
-            const observer = new ResizeObserver(() => fitFloorplan(stage));
+            let lastWidth = stage.clientWidth;
+            let lastHeight = stage.clientHeight;
+
+            const observer = new ResizeObserver(() => {
+              const width = stage.clientWidth;
+              const height = stage.clientHeight;
+
+              if (width === lastWidth && height === lastHeight) return;
+
+              lastWidth = width;
+              lastHeight = height;
+              updateFloorplanPresentation(stage);
+            });
+
             observer.observe(stage);
             stage._floorplanResizeObserver = observer;
           }
@@ -703,7 +853,7 @@
           stage.classList.remove("has-floorplan");
         });
     } else {
-      fitFloorplan(stage);
+      updateFloorplanPresentation(stage);
     }
   }
 

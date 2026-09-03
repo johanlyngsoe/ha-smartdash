@@ -66,12 +66,13 @@
   position: absolute;
   z-index: 1;
   inset: 0;
-  display: grid;
-  place-items: center;
   overflow: hidden;
 }
 
 .beast-floorplan-svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   display: block;
   max-width: none;
   max-height: none;
@@ -88,6 +89,88 @@
   z-index: 2;
   inset: 0;
   pointer-events: none;
+}
+
+/* Live room labels positioned from native SVG coordinates. */
+.beast-floorplan-room-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  max-width: 110px;
+  padding: clamp(3px, .35vw, 5px) clamp(5px, .5vw, 8px);
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: clamp(6px, .55vw, 9px);
+  background: rgba(13, 16, 23, .76);
+  color: #f7f8fb;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .20);
+  backdrop-filter: blur(7px);
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.beast-floorplan-room-label strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(.56rem, .66vw, .78rem);
+  font-weight: 650;
+  line-height: 1.08;
+}
+
+.beast-floorplan-room-label span {
+  display: block;
+  font-size: clamp(.53rem, .61vw, .72rem);
+  font-weight: 600;
+  line-height: 1.05;
+  opacity: .82;
+}
+
+.beast-floorplan-contact-status {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 1px;
+  opacity: 1 !important;
+  font-size: clamp(.50rem, .56vw, .68rem) !important;
+  font-weight: 650 !important;
+}
+
+.beast-floorplan-contact-status i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.beast-floorplan-contact-status.is-closed {
+  color: #67e8a5;
+}
+
+.beast-floorplan-contact-status.is-closed i {
+  background: currentColor;
+}
+
+.beast-floorplan-contact-status.is-open {
+  color: #ff7070;
+}
+
+.beast-floorplan-contact-status.is-open i {
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 112, 112, .14);
+}
+
+:root[data-color-mode="light"] .beast-floorplan-room-label {
+  border-color: rgba(20, 25, 35, .12);
+  background: rgba(255, 255, 255, .82);
+  color: #151922;
+  box-shadow: 0 3px 12px rgba(20, 25, 35, .10);
 }
 
 .beast-floorplan-missing {

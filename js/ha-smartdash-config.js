@@ -122,7 +122,7 @@ const BeastConfig = (() => {
       printer: { cards: [] },
       rooms: { cards: [] }, cameras: { cards: [] }, security: { cards: [] }, music: { cards: [] },
       energy: { cards: [] }, heating: { cards: [] }, car: { cards: [] }, pool: { cards: [] },
-      waste: { cards: [] }, weather: { cards: [] }
+      waste: { cards: [] }, school: { cards: [] }, weather: { cards: [] }
     },
     // The two small tiles under the clock/calendar card -- each is one of
     // "car"/"pool"/"robots"/"printer" (same set as the top-level generic

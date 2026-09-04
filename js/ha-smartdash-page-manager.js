@@ -6,9 +6,9 @@ window.BeastPageManager = (() => {
     ["weather", "Vejr", "cloud"], ["rooms", "Rum", "grid"], ["cameras", "Kameraer", "camera"],
     ["security", "Sikkerhed", "shield"], ["music", "Musik", "music"], ["energy", "Energi", "bolt"],
     ["heating", "Varme", "thermometer"], ["car", "Bil", "car"], ["pool", "Pool", "droplet"],
-    ["waste", "Kalender", "calendar"], ["robots", "Robotter", "robot"], ["printer", "3D Printer", "printer"]
+    ["waste", "Kalender", "calendar"], ["school", "Skole", "school"], ["robots", "Robotter", "robot"], ["printer", "3D Printer", "printer"]
   ].map(([id, label, icon]) => ({ id, label, icon, standard: true }));
-  const ICONS = ["grid", "home", "cloud", "camera", "shield", "music", "bolt", "thermometer", "car", "droplet", "calendar", "robot", "printer", "sparkles"];
+  const ICONS = ["grid", "home", "cloud", "camera", "shield", "music", "bolt", "thermometer", "car", "droplet", "calendar", "school", "robot", "printer", "sparkles"];
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const manifest = () => BeastConfig.get("pages") || { order: [], removed: [], custom: [], overrides: {} };
   const rememberManifest = () => { try { const history = JSON.parse(localStorage.getItem("beast-page-manifest-history") || "[]"); history.unshift({ at:new Date().toISOString(), data:manifest() }); localStorage.setItem("beast-page-manifest-history", JSON.stringify(history.slice(0,8))); } catch (_) {} };

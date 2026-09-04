@@ -1456,6 +1456,13 @@
 
   function renderSettingsView() {
     const floatingPlayerOn = isFloatingPlayerEnabled();
+    const presenceWake = BeastLocalSettings.get("presenceWake", {
+      enabled: false,
+      presenceEntity: "binary_sensor.bryggers_teknik_precense_presence",
+      distanceEntity: "number.bryggers_teknik_precense_target_distance_cm",
+      maxDistance: 120,
+      offAfterMinutes: 2
+    }) || {};
     return `
       <section class="admin-view${activeView === "settings" ? " is-active" : ""}" data-admin-view="settings">
         <div class="admin-settings-intro"><div><h2>Denne enhed</h2><p>Maskinspecifik adfærd for netop denne kiosk eller browser. Visuelle valg (tema, farver, stil) findes under Tema og design. Kiosk-navigation og dørkamera findes under Forbindelser & kiosk.</p></div></div>
@@ -1465,6 +1472,46 @@
         </div></div>
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>${t("Flydende musikafspiller", "Floating music player")}</h2><p>${t("Viser en lille afspiller-boks på forsiden mens der spilles musik. Gælder kun denne enhed/browser, ikke andre kiosker.", "Shows a small player box on the front page while music is playing. Applies only to this device/browser, not other kiosks.")}</p></div></div><div class="beast-stat-tile-actions"><button type="button" class="beast-security-action-btn${floatingPlayerOn ? " is-disarm" : ""}" id="adminSettingsFloatingPlayerBtn">${floatingPlayerOn ? t("Slå fra på denne enhed", "Turn off on this device") : t("Slå til på denne enhed", "Turn on on this device")}</button></div></div>
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>${t("Skærmtastatur", "On-screen keyboard")}</h2><p>${t("Viser automatisk et touch-tastatur ved tekst- og søgefelter på denne kiosk eller browser. Indstillingen gælder kun denne enhed.", "Automatically shows a touch keyboard for text and search fields on this kiosk or browser. The setting only applies to this device.")}</p></div></div><div class="beast-stat-tile-actions"><button type="button" class="beast-security-action-btn${BeastLocalSettings.get("virtualKeyboardEnabled", false) ? " is-disarm" : ""}" id="adminSettingsVirtualKeyboardBtn">${BeastLocalSettings.get("virtualKeyboardEnabled", false) ? t("Slå fra på denne enhed", "Turn off on this device") : t("Slå til på denne enhed", "Turn on on this device")}</button></div></div>
+
+        <div class="admin-card admin-settings-group">
+          <div class="admin-card-head"><div>
+            <h2>Automatisk skærmvækning</h2>
+            <p>Tænder denne kiosks skærm, når presence-sensoren registrerer en person inden for den valgte afstand. Indstillingen gælder kun denne enhed.</p>
+          </div></div>
+          <div class="beast-mqtt-config">
+            <label><span>Automatisk skærmvækning</span>
+              <select id="adminPresenceWakeEnabled">
+                <option value="0" ${presenceWake.enabled ? "" : "selected"}>Fra</option>
+                <option value="1" ${presenceWake.enabled ? "selected" : ""}>Til</option>
+              </select>
+            </label>
+            <label><span>Presence sensor</span>
+              ${BeastEntityPicker.selectHtml({
+                id: "adminPresenceWakePresence",
+                domain: "binary_sensor",
+                keywordHints: ["presence", "tilstede", "occupancy"],
+                selected: presenceWake.presenceEntity || ""
+              })}
+            </label>
+            <label><span>Afstandssensor</span>
+              ${BeastEntityPicker.selectHtml({
+                id: "adminPresenceWakeDistance",
+                domain: "number",
+                keywordHints: ["distance", "afstand", "target"],
+                selected: presenceWake.distanceEntity || ""
+              })}
+            </label>
+            <label><span>Tænd ved afstand op til (cm)</span>
+              <input type="number" min="1" max="1000" step="1" id="adminPresenceWakeDistanceLimit" value="${Math.max(1, Number(presenceWake.maxDistance) || 120)}">
+            </label>
+            <label><span>Sluk efter ingen tilstedeværelse (minutter)</span>
+              <input type="number" min="1" max="60" step="1" id="adminPresenceWakeOffAfter" value="${Math.max(1, Number(presenceWake.offAfterMinutes) || 2)}">
+            </label>
+          </div>
+          <p class="admin-field-hint">Afstandsgrænsen bruges kun til at vække skærmen. Når skærmen er tændt, forbliver den tændt, så længe presence-sensoren registrerer tilstedeværelse.</p>
+          <button type="button" class="beast-btn beast-btn-primary" id="adminPresenceWakeSave">Gem skærmvækning</button>
+        </div>
+
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>Kioskintegration</h2><p>Avanceret MQTT-styring og enhedskommandoer. Kan ignoreres på almindelige tablets.</p></div></div>${renderMqttPanel()}</div>
         <div class="admin-card admin-settings-group admin-diagnostics"><div class="admin-card-head"><div><h2>Diagnostik og session</h2><p>Seneste lokale hændelser samt mulighed for at logge Home Assistant-sessionen ud.</p></div></div><details><summary>Vis teknisk log</summary><pre class="beast-debug-log" id="adminDebugLog"></pre></details><button type="button" class="beast-btn" id="adminLogout">Log ud</button></div>
       </section>
@@ -2216,6 +2263,17 @@
         ? t("Slå fra på denne enhed", "Turn off on this device")
         : t("Slå til på denne enhed", "Turn on on this device");
     });
+
+    document.getElementById("adminPresenceWakeSave")?.addEventListener("click", (event) => save(event.currentTarget, "presenceWake", () => {
+      BeastLocalSettings.set("presenceWake", {
+        enabled: document.getElementById("adminPresenceWakeEnabled").value === "1",
+        presenceEntity: document.getElementById("adminPresenceWakePresence").value || null,
+        distanceEntity: document.getElementById("adminPresenceWakeDistance").value || null,
+        maxDistance: Math.max(1, Math.min(1000, Number(document.getElementById("adminPresenceWakeDistanceLimit").value) || 120)),
+        offAfterMinutes: Math.max(1, Math.min(60, Number(document.getElementById("adminPresenceWakeOffAfter").value) || 2))
+      });
+      return { success: true };
+    }));
     document.querySelector("[data-export-config]")?.addEventListener("click", () => downloadJson(`ha-smartdash-profile-${new Date().toISOString().slice(0,10)}.json`, portableProfile()));
     document.querySelector("[data-export-local]")?.addEventListener("click", () => downloadJson(`beast-screen-${new Date().toISOString().slice(0,10)}.json`, { type: "beast-local", version: 1, data: BeastLocalSettings.getAll() }));
     document.querySelector("[data-import-backup]")?.addEventListener("change", async (event) => {

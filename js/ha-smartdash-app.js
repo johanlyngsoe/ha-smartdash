@@ -96,6 +96,10 @@ let ambientBrightnessDebounceId = null;
 let screenOffTimerId = null;
 let morningWakeTimerId = null;
 let nightStartTimerId = null;
+let presenceWakeOffTimerId = null;
+let presenceWakeUnsubscribePresence = null;
+let presenceWakeUnsubscribeDistance = null;
+let presenceWakeWasClose = false;
 let kioskScreenIsOff = false;
 let doorbellTimerId = null;
 let lastDoorbellAt = 0;
@@ -116,16 +120,169 @@ function noteUserActivity() {
 }
 
 function setKioskScreenPower(on) {
-  if (!window.BeastAuth?.haFetch) return;
+  const entityId = KIOSK_SCREEN_ENTITY_ID();
+  if (!entityId || !BeastAuth?.haFetch) return;
+
   kioskScreenIsOff = !on;
+
   BeastAuth.haFetch(`/api/services/light/turn_${on ? "on" : "off"}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ entity_id: KIOSK_SCREEN_ENTITY_ID() })
+    body: JSON.stringify({ entity_id: entityId })
   }).catch((error) => {
     kioskScreenIsOff = false;
     BeastCore.log(`Skærmstyring: kunne ikke ${on ? "tænde" : "slukke"} kioskskærmen (${error.message}).`);
   });
+}
+
+function presenceWakeConfig() {
+  return BeastLocalSettings.get("presenceWake", {
+    enabled: false,
+    presenceEntity: "binary_sensor.bryggers_teknik_precense_presence",
+    distanceEntity: "number.bryggers_teknik_precense_target_distance_cm",
+    maxDistance: 120,
+    offAfterMinutes: 2
+  }) || {};
+}
+
+function presenceWakeHasPresence() {
+  const config = presenceWakeConfig();
+  if (!config.enabled || !config.presenceEntity || !config.distanceEntity) return false;
+
+  const presenceState = BeastHaSocket.getState(config.presenceEntity)?.state;
+  if (presenceState !== "on") return false;
+
+  const distance = Number(BeastHaSocket.getState(config.distanceEntity)?.state);
+  const maxDistance = Math.max(1, Number(config.maxDistance) || 120);
+
+  return Number.isFinite(distance) && distance > 0 && distance <= maxDistance;
+}
+
+function clearPresenceWakeOffTimer() {
+  window.clearTimeout(presenceWakeOffTimerId);
+  presenceWakeOffTimerId = null;
+}
+
+function schedulePresenceWakeOff(config = presenceWakeConfig()) {
+  if (presenceWakeOffTimerId || !config.enabled) {
+    return;
+  }
+
+  const delayMs = Math.max(1, Math.min(60, Number(config.offAfterMinutes) || 2)) * 60 * 1000;
+
+  presenceWakeOffTimerId = window.setTimeout(() => {
+    presenceWakeOffTimerId = null;
+
+    const current = presenceWakeConfig();
+    if (!current.enabled || !current.presenceEntity) return;
+
+    const presenceState = BeastHaSocket.getState(current.presenceEntity)?.state;
+
+    // Never turn the display off based on missing or unreliable HA state.
+    if (!presenceState || ["unknown", "unavailable"].includes(presenceState)) return;
+    if (!["on", "off"].includes(presenceState)) return;
+
+    const distance = Number(BeastHaSocket.getState(current.distanceEntity)?.state);
+    const maxDistance = Math.max(1, Number(current.maxDistance) || 120);
+    const isClose = presenceState === "on"
+      && Number.isFinite(distance)
+      && distance > 0
+      && distance <= maxDistance;
+
+    // Somebody is still inside the wake zone.
+    if (isClose) return;
+
+    // A doorbell view explicitly wakes the display and gets priority over
+    // ordinary presence timeout. Retry later instead of turning it off
+    // underneath somebody viewing the camera.
+    if (document.querySelector(".beast-doorbell-view")) {
+      schedulePresenceWakeOff(current);
+      return;
+    }
+
+    setKioskScreenPower(false);
+  }, delayMs);
+}
+
+function evaluatePresenceWake() {
+  const config = presenceWakeConfig();
+
+  if (!config.enabled || !config.presenceEntity || !config.distanceEntity) {
+    clearPresenceWakeOffTimer();
+    presenceWakeWasClose = false;
+    return;
+  }
+
+  const presenceState = BeastHaSocket.getState(config.presenceEntity)?.state;
+
+  // Never interpret a missing/unavailable HA state as "nobody is here".
+  if (!presenceState || ["unknown", "unavailable"].includes(presenceState)) return;
+
+  if (presenceState === "off") {
+    presenceWakeWasClose = false;
+    schedulePresenceWakeOff(config);
+    return;
+  }
+
+  if (presenceState !== "on") return;
+
+  const distance = Number(BeastHaSocket.getState(config.distanceEntity)?.state);
+  const maxDistance = Math.max(1, Number(config.maxDistance) || 120);
+  const isClose = Number.isFinite(distance) && distance > 0 && distance <= maxDistance;
+
+  // Alarm/manual screen lock has priority. Presence must never reveal the
+  // dashboard underneath an active PIN overlay.
+  if (document.querySelector(".beast-screen-lock")) {
+    presenceWakeWasClose = false;
+    return;
+  }
+
+  // The mmWave sensor can report a far-away/ghost presence indefinitely.
+  // Only presence inside the configured wake distance should keep the
+  // display awake. A temporary distance jump is tolerated by the normal
+  // off-delay; returning inside the zone cancels that timer again.
+  if (!isClose) {
+    presenceWakeWasClose = false;
+    schedulePresenceWakeOff(config);
+    return;
+  }
+
+  clearPresenceWakeOffTimer();
+
+  if (!presenceWakeWasClose) {
+    setKioskScreenPower(true);
+    hideAmbientMode();
+    lastUserActivityAt = Date.now();
+    scheduleAmbientMode();
+    BeastCore.log(`Skærmvækning: presence registreret ${Math.round(distance)} cm fra skærmen.`);
+  }
+
+  presenceWakeWasClose = true;
+}
+
+function setupPresenceWakeSubscriptions() {
+  presenceWakeUnsubscribePresence?.();
+  presenceWakeUnsubscribeDistance?.();
+  presenceWakeUnsubscribePresence = null;
+  presenceWakeUnsubscribeDistance = null;
+
+  clearPresenceWakeOffTimer();
+  presenceWakeWasClose = false;
+
+  const config = presenceWakeConfig();
+  if (!config.enabled || !config.presenceEntity || !config.distanceEntity) return;
+
+  presenceWakeUnsubscribePresence = BeastHaSocket.subscribeEntity(
+    config.presenceEntity,
+    evaluatePresenceWake
+  );
+
+  presenceWakeUnsubscribeDistance = BeastHaSocket.subscribeEntity(
+    config.distanceEntity,
+    evaluatePresenceWake
+  );
+
+  evaluatePresenceWake();
 }
 
 document.addEventListener("beast:alarm-screen-off", () => {
@@ -404,7 +561,7 @@ function wireAmbientBrightness(overlay) {
     ambientBrightnessDebounceId = window.setTimeout(() => {
       BeastLocalSettings.set("screensaver", { ...screensaverConfig(), brightnessPercent: pct });
       const kioskLight = KIOSK_SCREEN_ENTITY_ID();
-      if (!kioskLight || !window.BeastAuth?.haFetch) return;
+      if (!kioskLight || !BeastAuth?.haFetch) return;
       BeastAuth.haFetch("/api/services/light/turn_on", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -497,7 +654,13 @@ function showAmbientMode(force = false) {
   window.clearTimeout(screenOffTimerId);
   const offAfterMs = Math.max(1, Number(config.offAfterMinutes) || 5) * 60 * 1000;
   screenOffTimerId = window.setTimeout(() => {
-    if (document.body.classList.contains("beast-is-ambient") && !document.hidden) setKioskScreenPower(false);
+    if (
+      document.body.classList.contains("beast-is-ambient")
+      && !document.hidden
+      && !presenceWakeHasPresence()
+    ) {
+      setKioskScreenPower(false);
+    }
   }, offAfterMs);
   window.clearInterval(ambientClockTimerId);
   ambientClockTimerId = window.setInterval(updateAmbientClock, 30000);
@@ -753,6 +916,19 @@ function startKioskWatchdogs() {
   scheduleAmbientMode();
   scheduleMorningWake();
   scheduleNightStart();
+  setupPresenceWakeSubscriptions();
+
+  BeastHaSocket.onStatusChange((status) => {
+    if (status === "connected") evaluatePresenceWake();
+  });
+
+  document.addEventListener("beast:local-settings-changed", (event) => {
+    const changedPath = event.detail?.path || "";
+    if (changedPath === "*" || changedPath === "presenceWake" || changedPath.startsWith("presenceWake.")) {
+      setupPresenceWakeSubscriptions();
+    }
+  });
+
   document.addEventListener("beast:config-changed", () => {
     scheduleAmbientMode();
     scheduleMorningWake();

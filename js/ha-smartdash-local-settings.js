@@ -8,6 +8,13 @@ const BeastLocalSettings = (() => {
     kioskScreenLight: null,
     virtualKeyboardEnabled: false,
     language: "en",
+    presenceWake: {
+      enabled: false,
+      presenceEntity: "binary_sensor.bryggers_teknik_precense_presence",
+      distanceEntity: "number.bryggers_teknik_precense_target_distance_cm",
+      maxDistance: 120,
+      offAfterMinutes: 2
+    },
     screensaver: { enabled: true, schedule: "custom", startTime: "23:00", endTime: "05:30", offAfterMinutes: 5 }
   };
   function readRaw() {
@@ -16,7 +23,12 @@ const BeastLocalSettings = (() => {
   }
   function read() {
     const stored = readRaw();
-    return { ...DEFAULTS, ...stored, screensaver: { ...DEFAULTS.screensaver, ...(stored.screensaver || {}) } };
+    return {
+      ...DEFAULTS,
+      ...stored,
+      presenceWake: { ...DEFAULTS.presenceWake, ...(stored.presenceWake || {}) },
+      screensaver: { ...DEFAULTS.screensaver, ...(stored.screensaver || {}) }
+    };
   }
   function get(path, fallback = null) {
     const value = path.split(".").reduce((node, key) => node == null ? undefined : node[key], readRaw());
@@ -37,7 +49,12 @@ const BeastLocalSettings = (() => {
   }
   function replaceAll(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return { success: false };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULTS, ...value, screensaver: { ...DEFAULTS.screensaver, ...(value.screensaver || {}) } }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ...DEFAULTS,
+      ...value,
+      presenceWake: { ...DEFAULTS.presenceWake, ...(value.presenceWake || {}) },
+      screensaver: { ...DEFAULTS.screensaver, ...(value.screensaver || {}) }
+    }));
     document.dispatchEvent(new CustomEvent("beast:local-settings-changed", { detail: { path: "*", value } }));
     return { success: true };
   }

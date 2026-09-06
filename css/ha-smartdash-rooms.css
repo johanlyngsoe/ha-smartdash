@@ -12,14 +12,140 @@
   min-height: 0;
   padding: clamp(8px, 1.2vw, 18px);
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: clamp(6px, .7vw, 10px);
+}
+
+/* =========================================================
+   ROOM STATUS BAR
+   ========================================================= */
+
+.beast-room-statusbar {
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: clamp(6px, .7vw, 10px);
+  min-height: 36px;
+}
+
+.beast-room-status-item {
+  appearance: none;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(5px, .5vw, 8px);
+  padding:
+    clamp(6px, .55vw, 8px)
+    clamp(9px, .8vw, 13px);
+
+  border: 1px solid var(--border);
+  border-radius: clamp(9px, .8vw, 12px);
+
+  background: var(--surface-solid, #101218);
+  color: var(--ink);
+
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.beast-room-status-item:hover {
+  background: rgba(255, 255, 255, .04);
+}
+
+.beast-room-status-indicator {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #67e8a5;
+  box-shadow: 0 0 0 3px rgba(103, 232, 165, .10);
+}
+
+.beast-room-status-item.has-alert
+  .beast-room-status-indicator {
+  background: #ff7070;
+  box-shadow: 0 0 0 3px rgba(255, 112, 112, .13);
+}
+
+.beast-room-status-label {
+  color: var(--ink-muted);
+  font-size: clamp(.68rem, .72vw, .82rem);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.beast-room-status-state {
+  font-size: clamp(.7rem, .76vw, .86rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.beast-room-status-item.has-alert
+  .beast-room-status-state {
+  color: #ff8585;
+}
+
+.beast-room-status-details {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.beast-room-status-details[hidden] {
+  display: none;
+}
+
+.beast-room-status-detail-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+
+  border: 1px solid rgba(255, 112, 112, .24);
+  border-radius: 999px;
+
+  background: rgba(255, 112, 112, .08);
+  color: var(--ink);
+
+  font-size: clamp(.62rem, .67vw, .76rem);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+:root[data-color-mode="light"]
+  .beast-room-status-item {
+  background: rgba(255, 255, 255, .88);
+}
+
+:root[data-color-mode="light"]
+  .beast-room-status-item:hover {
+  background: #fff;
+}
+
+:root[data-color-mode="light"]
+  .beast-room-status-item.has-alert
+  .beast-room-status-state {
+  color: #c94747;
+}
+
+:root[data-color-mode="light"]
+  .beast-room-status-detail-item {
+  background: rgba(210, 60, 60, .06);
+  border-color: rgba(210, 60, 60, .18);
 }
 
 .beast-floorplan-stage {
   position: relative;
   width: 100%;
-  height: 100%;
+  height: auto;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;

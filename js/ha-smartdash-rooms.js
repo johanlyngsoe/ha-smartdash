@@ -774,6 +774,103 @@
     "binary_sensor.gubsotoften_gubsotoften_4_abner_6": { x: 885, y: 496 } // Terrassedør stue
   };
 
+  function floorplanContactDisplayName(entityId, state) {
+    const rawName = String(
+      state?.attributes?.friendly_name || entityId
+    );
+
+    return rawName
+      .replace(/\s+Åbner$/i, "")
+      .replace(/\s+Opening$/i, "")
+      .trim();
+  }
+
+  function renderFloorplanStatusBar() {
+    const bar = containerEl?.querySelector("#beastRoomsStatusBar");
+    const contactButton = containerEl?.querySelector("#beastRoomsContactStatus");
+    const contactState = containerEl?.querySelector("#beastRoomsContactState");
+    const details = containerEl?.querySelector("#beastRoomsContactDetails");
+
+    if (!bar || !contactButton || !contactState || !details) return;
+
+    const contacts = Object.keys(FLOORPLAN_CONTACT_POSITIONS)
+      .map((entityId) => {
+        const state = BeastHaSocket.getState(entityId);
+        if (!state) return null;
+
+        return {
+          entityId,
+          state,
+          isOpen: state.state === "on",
+          name: floorplanContactDisplayName(entityId, state)
+        };
+      })
+      .filter(Boolean);
+
+    const openContacts = contacts.filter(
+      (contact) => contact.isOpen
+    );
+
+    const allClosed = openContacts.length === 0;
+
+    contactButton.classList.toggle("is-ok", allClosed);
+    contactButton.classList.toggle("has-alert", !allClosed);
+
+    contactState.textContent = allClosed
+      ? "Alt lukket"
+      : `${openContacts.length} ${
+          openContacts.length === 1 ? "åben" : "åbne"
+        }`;
+
+    contactButton.setAttribute(
+      "aria-label",
+      allClosed
+        ? "Alle døre og vinduer er lukket"
+        : `${openContacts.length} åbne døre eller vinduer`
+    );
+
+    if (allClosed) {
+      details.hidden = true;
+      details.innerHTML = "";
+      contactButton.setAttribute("aria-expanded", "false");
+      bar.classList.remove("has-details");
+      return;
+    }
+
+    details.innerHTML = openContacts
+      .map(
+        (contact) => `
+          <span class="beast-room-status-detail-item">
+            ${escapeHtml(contact.name)}
+          </span>
+        `
+      )
+      .join("");
+
+    if (!contactButton.dataset.bound) {
+      contactButton.dataset.bound = "true";
+
+      contactButton.addEventListener("click", () => {
+        const detailHost = containerEl?.querySelector(
+          "#beastRoomsContactDetails"
+        );
+
+        if (!detailHost || !detailHost.innerHTML.trim()) return;
+
+        const shouldOpen = detailHost.hidden;
+
+        detailHost.hidden = !shouldOpen;
+
+        contactButton.setAttribute(
+          "aria-expanded",
+          shouldOpen ? "true" : "false"
+        );
+
+        bar.classList.toggle("has-details", shouldOpen);
+      });
+    }
+  }
+
   function renderFloorplanContactMarkers(stage) {
     const svg = stage?.querySelector(".beast-floorplan-svg");
     const overlay = stage?.querySelector("#beastRoomsFloorplanOverlay");
@@ -838,6 +935,7 @@
     fitFloorplan(stage);
 
     requestAnimationFrame(() => {
+      renderFloorplanStatusBar();
       renderFloorplanRoomLabels(stage);
       renderFloorplanContactMarkers(stage);
     });
@@ -853,6 +951,41 @@
     if (!stage) {
       containerEl.innerHTML = `
         <div class="beast-floorplan-shell">
+
+          <div
+            class="beast-room-statusbar"
+            id="beastRoomsStatusBar"
+          >
+            <button
+              type="button"
+              class="beast-room-status-item is-ok"
+              id="beastRoomsContactStatus"
+              aria-expanded="false"
+            >
+              <span
+                class="beast-room-status-indicator"
+                aria-hidden="true"
+              ></span>
+
+              <span class="beast-room-status-label">
+                Døre &amp; vinduer
+              </span>
+
+              <strong
+                class="beast-room-status-state"
+                id="beastRoomsContactState"
+              >
+                Alt lukket
+              </strong>
+            </button>
+
+            <div
+              class="beast-room-status-details"
+              id="beastRoomsContactDetails"
+              hidden
+            ></div>
+          </div>
+
           <div class="beast-floorplan-stage" id="beastRoomsFloorplan">
 
             <div

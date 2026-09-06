@@ -130,42 +130,6 @@
   opacity: .82;
 }
 
-.beast-floorplan-contact-status {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 1px;
-  opacity: 1 !important;
-  font-size: clamp(.50rem, .56vw, .68rem) !important;
-  font-weight: 650 !important;
-}
-
-.beast-floorplan-contact-status i {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.beast-floorplan-contact-status.is-closed {
-  color: #67e8a5;
-}
-
-.beast-floorplan-contact-status.is-closed i {
-  background: currentColor;
-}
-
-.beast-floorplan-contact-status.is-open {
-  color: #ff7070;
-}
-
-.beast-floorplan-contact-status.is-open i {
-  background: currentColor;
-  box-shadow: 0 0 0 3px rgba(255, 112, 112, .14);
-}
-
 :root[data-color-mode="light"] .beast-floorplan-room-label {
   border-color: rgba(20, 25, 35, .12);
   background: rgba(255, 255, 255, .82);
@@ -614,3 +578,37 @@
 .beast-room-layout-row input { width: 24px; height: 24px; accent-color: var(--accent); }
 .beast-room-layout-row button { min-width: 46px; min-height: 46px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-solid); color: var(--ink); font-size: 20px; }
 .beast-room-layout-row button:disabled { opacity: .35; }
+
+/* Physical door/window status markers on the floorplan. */
+.beast-floorplan-contact-marker {
+  position: absolute;
+  z-index: 20;
+  width: clamp(9px, .7vw, 12px);
+  height: clamp(9px, .7vw, 12px);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(10, 13, 18, .88);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow:
+    0 1px 4px rgba(0,0,0,.55),
+    0 0 0 1px rgba(255,255,255,.18);
+}
+
+.beast-floorplan-contact-marker.is-closed {
+  background: #67e8a5;
+}
+
+.beast-floorplan-contact-marker.is-open {
+  background: #ff7070;
+  box-shadow:
+    0 1px 4px rgba(0,0,0,.55),
+    0 0 0 1px rgba(255,255,255,.18),
+    0 0 0 4px rgba(255,112,112,.18);
+}
+
+:root[data-color-mode="light"] .beast-floorplan-contact-marker {
+  border-color: rgba(255,255,255,.92);
+  box-shadow:
+    0 1px 4px rgba(20,25,35,.24),
+    0 0 0 1px rgba(20,25,35,.16);
+}

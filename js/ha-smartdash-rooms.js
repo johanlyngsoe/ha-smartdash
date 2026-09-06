@@ -107,13 +107,40 @@
       const value = Number(state?.state);
       if (!Number.isFinite(value)) return null;
       const name = String(state?.attributes?.friendly_name || entityId).toLowerCase();
+
       let score = stateDeviceClass === deviceClass ? 10 : 0;
-      if (name.includes(deviceClass === "temperature" ? "temperatur" : "fugt")) score += 2;
-      if (!name.includes("battery") && !name.includes("batteri")) score += 1;
+
+      if (name.includes(deviceClass === "temperature" ? "temperatur" : "fugt")) {
+        score += 2;
+      }
+
+      if (!name.includes("battery") && !name.includes("batteri")) {
+        score += 1;
+      }
+
+      // Avoid using appliance temperatures as room climate.
+      const applianceTerms = [
+        "ovn",
+        "fryser",
+        "køleskab",
+        "koleskab",
+        "fridge",
+        "freezer",
+        "oven",
+        "display temperature"
+      ];
+
+      if (applianceTerms.some((term) => name.includes(term))) {
+        score -= 20;
+      }
+
       return { entityId, score };
     }).filter(Boolean);
     candidates.sort((a, b) => b.score - a.score || a.entityId.localeCompare(b.entityId));
-    return candidates[0]?.entityId || null;
+
+    return candidates[0]?.score > 0
+      ? candidates[0].entityId
+      : null;
   }
 
   function roomClimate(areaId, climateIds) {
@@ -722,31 +749,98 @@
         ? ""
         : `<span>${escapeHtml(summary.temperatureLabel)}</span>`;
 
-      let contactHtml = "";
-      if (summary.contactCount > 0) {
-        const contactClass = summary.openCount > 0 ? "is-open" : "is-closed";
-        const contactText = summary.openCount > 0
-          ? `${summary.openCount} ${summary.openCount === 1 ? "åben" : "åbne"}`
-          : "Lukket";
-
-        contactHtml = `
-          <span class="beast-floorplan-contact-status ${contactClass}">
-            <i></i>${escapeHtml(contactText)}
-          </span>
-        `;
-      }
-
       label.innerHTML = `
         <strong>${escapeHtml(area.name)}</strong>
         ${temperatureHtml}
-        ${contactHtml}
       `;
     });
   }
 
+  const FLOORPLAN_CONTACT_POSITIONS = {
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_4": { x: 695, y: 398 }, // Alrum dobbelt terrassedør
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_5": { x: 795, y: 397 }, // Terrassedør alrum
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_15": { x: 297, y: 314 }, // Vindue bryggers
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_8": { x: 527, y: 76 }, // Frederikke vindue
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_2": { x: 329, y: 246 }, // Hoveddør
+    "binary_sensor.gubsotoften_gubsotoften_4_abner": { x: 339, y: 620 }, // Dør garage
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_12": { x: 263, y: 622 }, // Vindue garage
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_11": { x: 445, y: 472 }, // Vindue værksted
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_10": { x: 604, y: 397 }, // Vindue kontor
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_14": { x: 480, y: 397 }, // Vindue lille badeværelse
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_7": { x: 369, y: 76 }, // Mikkeline vindue
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_3": { x: 1049, y: 221 }, // Terrassedør soveværelse
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_9": { x: 1046, y: 138 }, // Vindue soveværelse
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_13": { x: 864, y: 77 }, // Vindue stort badeværelse
+    "binary_sensor.gubsotoften_gubsotoften_4_abner_6": { x: 885, y: 496 } // Terrassedør stue
+  };
+
+  function renderFloorplanContactMarkers(stage) {
+    const svg = stage?.querySelector(".beast-floorplan-svg");
+    const overlay = stage?.querySelector("#beastRoomsFloorplanOverlay");
+    if (!stage || !svg || !overlay) return;
+
+    const validEntityIds = new Set(
+      Object.keys(FLOORPLAN_CONTACT_POSITIONS)
+    );
+
+    overlay
+      .querySelectorAll(".beast-floorplan-contact-marker")
+      .forEach((marker) => {
+        if (!validEntityIds.has(marker.dataset.entityId)) {
+          marker.remove();
+        }
+      });
+
+    Object.entries(FLOORPLAN_CONTACT_POSITIONS).forEach(
+      ([entityId, position]) => {
+        const state = BeastHaSocket.getState(entityId);
+        if (!state) return;
+
+        const point = floorplanPointToStage(
+          stage,
+          svg,
+          position.x,
+          position.y
+        );
+
+        if (!point) return;
+
+        let marker = overlay.querySelector(
+          `.beast-floorplan-contact-marker[data-entity-id="${CSS.escape(entityId)}"]`
+        );
+
+        if (!marker) {
+          marker = document.createElement("span");
+          marker.className = "beast-floorplan-contact-marker";
+          marker.dataset.entityId = entityId;
+          overlay.appendChild(marker);
+        }
+
+        const isOpen = state.state === "on";
+        const name = state.attributes?.friendly_name || entityId;
+
+        marker.classList.toggle("is-open", isOpen);
+        marker.classList.toggle("is-closed", !isOpen);
+
+        marker.style.left = `${point.left}px`;
+        marker.style.top = `${point.top}px`;
+
+        marker.title = `${name}: ${isOpen ? "Åben" : "Lukket"}`;
+        marker.setAttribute(
+          "aria-label",
+          `${name}: ${isOpen ? "Åben" : "Lukket"}`
+        );
+      }
+    );
+  }
+
   function updateFloorplanPresentation(stage) {
     fitFloorplan(stage);
-    requestAnimationFrame(() => renderFloorplanRoomLabels(stage));
+
+    requestAnimationFrame(() => {
+      renderFloorplanRoomLabels(stage);
+      renderFloorplanContactMarkers(stage);
+    });
   }
 
   function renderFloorplan() {

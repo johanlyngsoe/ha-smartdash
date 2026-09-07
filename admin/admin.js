@@ -636,6 +636,36 @@
     return { refresh: "refresh", hard: "hard-reload", chrome: "restart-chrome", shot: "screenshot", reboot: "reboot", shutdown: "shutdown" }[kind] || kind;
   }
 
+  const HP_DESKTOP_COMMAND_TOPIC = "smartdash/hp/kiosk/command";
+
+  async function openHpDesktop(button) {
+    const feedback = document.getElementById("adminHpDesktopFeedback");
+
+    if (!window.BeastScreenLock?.hasPin()) {
+      if (feedback) feedback.textContent = t("Opret først en pinkode.", "Create a PIN first.");
+      return;
+    }
+
+    const verified = await new Promise((resolve) =>
+      window.BeastScreenLock.requestPinVerification(resolve)
+    );
+    if (!verified) return;
+
+    button.disabled = true;
+    try {
+      await callService("mqtt", "publish", {
+        topic: HP_DESKTOP_COMMAND_TOPIC,
+        payload: "OPEN_DESKTOP",
+        qos: 0,
+        retain: false
+      });
+      if (feedback) feedback.textContent = t("Åbner desktop…", "Opening desktop…");
+    } catch (error) {
+      if (feedback) feedback.textContent = `${t("Kommando fejlede", "Command failed")}: ${error.message}`;
+      button.disabled = false;
+    }
+  }
+
   function publishDirectKioskCommand(kind) {
     return callService("mqtt", "publish", {
       topic: "dashboard/kiosk/command",
@@ -1513,6 +1543,16 @@
         </div>
 
         <div class="admin-card admin-settings-group"><div class="admin-card-head"><div><h2>Kioskintegration</h2><p>Avanceret MQTT-styring og enhedskommandoer. Kan ignoreres på almindelige tablets.</p></div></div>${renderMqttPanel()}</div>
+        <div class="admin-card admin-settings-group">
+          <div class="admin-card-head"><div>
+            <h2>${t("HP desktop", "HP desktop")}</h2>
+            <p>${t("Afslut SmartDash-kiosken og brug Ubuntu-skrivebordet. Start kiosken igen med det eksisterende SmartDash-ikon på skrivebordet.", "Exit the SmartDash kiosk and use the Ubuntu desktop. Restart the kiosk using the existing SmartDash desktop icon.")}</p>
+          </div></div>
+          <div class="beast-stat-tile-actions">
+            <button type="button" class="beast-security-action-btn" id="adminHpOpenDesktop" ${window.BeastScreenLock?.hasPin() ? "" : "disabled"}>${t("Åbn desktop", "Open desktop")}</button>
+          </div>
+          <p class="admin-field-hint" id="adminHpDesktopFeedback">${t("Kræver pinkode. Kommandoen sendes til den konfigurerede HP-kiosk.", "PIN required. The command is sent to the configured HP kiosk.")}</p>
+        </div>
         <div class="admin-card admin-settings-group admin-diagnostics"><div class="admin-card-head"><div><h2>Diagnostik og session</h2><p>Seneste lokale hændelser samt mulighed for at logge Home Assistant-sessionen ud.</p></div></div><details><summary>Vis teknisk log</summary><pre class="beast-debug-log" id="adminDebugLog"></pre></details><button type="button" class="beast-btn" id="adminLogout">Log ud</button></div>
       </section>
     `;
@@ -2531,6 +2571,9 @@
     });
     document.querySelectorAll("[data-kiosk-action]").forEach((button) => {
       button.addEventListener("click", () => handleKioskAction(button));
+    });
+    document.getElementById("adminHpOpenDesktop")?.addEventListener("click", (event) => {
+      openHpDesktop(event.currentTarget);
     });
     document.getElementById("adminLogout")?.addEventListener("click", () => {
       BeastAuth.logout();

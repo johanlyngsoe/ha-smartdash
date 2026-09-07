@@ -11,6 +11,7 @@ const RAIL_ITEMS = [
   { id: "pool", label: "Pool", icon: "droplet" },
   { id: "waste", label: "Kalender", icon: "calendar" },
   { id: "school", label: "Skole", icon: "school" },
+  { id: "shopping", label: "Indkøb", icon: "cart" },
   { id: "robots", label: "Robotter", icon: "robot" },
   { id: "printer", label: "3D Printer", icon: "printer" },
   { id: "settings", label: "Administration", icon: "settings" }
@@ -31,6 +32,7 @@ const MOUNTED_SECTION_ZONES = {
   pool: "beastPoolZone",
   waste: "beastWasteZone",
   school: "beastSchoolZone",
+  shopping: "beastShoppingZone",
   robots: "beastRobotsZone",
   printer: "beastPrinterZone"
 };
@@ -251,7 +253,7 @@ function evaluatePresenceWake() {
 
   clearPresenceWakeOffTimer();
 
-  if (!presenceWakeWasClose) {
+  if (!presenceWakeWasClose || kioskScreenIsOff) {
     setKioskScreenPower(true);
     hideAmbientMode();
     lastUserActivityAt = Date.now();

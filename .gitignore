@@ -12,3 +12,4 @@ data/version-snapshots/
 data/*.db*
 data/price-collector.env
 __pycache__/
+data/logs/

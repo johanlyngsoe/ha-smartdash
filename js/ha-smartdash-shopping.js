@@ -21,6 +21,7 @@ window.BeastShopping = (() => {
   let monitoredProducts = [];
   let monitorBusy = false;
   let monitorError = "";
+  let monitorModalEl = null;
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -67,6 +68,28 @@ window.BeastShopping = (() => {
     ) || null;
   }
 
+  async function savePriceMonitor(name) {
+    const productName = normalizeTerm(name);
+    if (!productName) throw new Error(t("Skriv et produktnavn.", "Enter a product name."));
+
+    const response = await fetch(PRICE_MONITOR_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: productName,
+        search_term: productName
+      })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.success) {
+      throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
+    }
+
+    monitoredProducts = await getMonitoredProducts();
+    return payload.product;
+  }
+
   async function addPriceMonitor(item) {
     if (!item || monitorBusy) return;
 
@@ -75,27 +98,31 @@ window.BeastShopping = (() => {
     render();
 
     try {
-      const name = normalizeTerm(item.summary);
-      const response = await fetch(PRICE_MONITOR_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          search_term: name
-        })
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
-      }
-
-      monitoredProducts = await getMonitoredProducts();
+      await savePriceMonitor(item.summary);
     } catch (err) {
       monitorError = err.message || String(err);
     } finally {
       monitorBusy = false;
       render();
+      if (monitorModalEl) openPriceMonitorModal();
+    }
+  }
+
+  async function addManualPriceMonitor(name) {
+    if (monitorBusy) return;
+
+    monitorBusy = true;
+    monitorError = "";
+    if (monitorModalEl) openPriceMonitorModal();
+
+    try {
+      await savePriceMonitor(name);
+    } catch (err) {
+      monitorError = err.message || String(err);
+    } finally {
+      monitorBusy = false;
+      render();
+      if (monitorModalEl) openPriceMonitorModal();
     }
   }
 
@@ -105,6 +132,7 @@ window.BeastShopping = (() => {
     monitorBusy = true;
     monitorError = "";
     render();
+    if (monitorModalEl) openPriceMonitorModal();
 
     try {
       const response = await fetch(PRICE_MONITOR_API, {
@@ -124,7 +152,203 @@ window.BeastShopping = (() => {
     } finally {
       monitorBusy = false;
       render();
+      if (monitorModalEl) openPriceMonitorModal();
     }
+  }
+
+  function monitoredSince(value) {
+    if (!value) return "–";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "–";
+    return date.toLocaleDateString(
+      english() ? "en-GB" : "da-DK",
+      { day: "numeric", month: "short", year: "numeric" }
+    );
+  }
+
+  function closePriceMonitorModal() {
+    monitorModalEl?.remove();
+    monitorModalEl = null;
+  }
+
+  function openPriceMonitorModal() {
+    closePriceMonitorModal();
+
+    const overlay = document.createElement("div");
+    overlay.id = "beastPriceMonitorModal";
+    overlay.className = "beast-modal-overlay";
+
+    const productMarkup = monitoredProducts.length
+      ? `
+        <div class="beast-price-monitor-table-wrap">
+          <table class="beast-price-monitor-table">
+            <thead>
+              <tr>
+                <th>${t("Produkt", "Product")}</th>
+                <th>${t("Siden", "Since")}</th>
+                <th class="is-number">${t("Seneste", "Latest")}</th>
+                <th class="is-number">${t("Gns.", "Avg.")}</th>
+                <th class="is-number">${t("Laveste", "Lowest")}</th>
+                <th class="is-number">${t("Højeste", "Highest")}</th>
+                <th class="is-action"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${monitoredProducts.map((product) => `
+                <tr>
+                  <td class="beast-price-monitor-name">
+                    <strong>${escapeHtml(product.name)}</strong>
+                  </td>
+                  <td class="beast-price-monitor-since">
+                    ${escapeHtml(monitoredSince(product.created_at))}
+                  </td>
+                  <td class="is-number">–</td>
+                  <td class="is-number">–</td>
+                  <td class="is-number">–</td>
+                  <td class="is-number">–</td>
+                  <td class="is-action">
+                    <button
+                      type="button"
+                      class="beast-btn beast-price-monitor-remove"
+                      data-monitor-stop="${Number(product.id)}"
+                      ${monitorBusy ? "disabled" : ""}
+                    >
+                      ${t("Fjern", "Remove")}
+                    </button>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <p class="beast-price-monitor-history-note">
+          ${t(
+            "Prisstatistik vises, når den automatiske prisindsamling er aktiveret.",
+            "Price statistics will appear when automatic price collection is enabled."
+          )}
+        </p>
+      `
+      : `
+        <p class="beast-shopping-empty">
+          ${t(
+            "Der er ingen aktive prisovervågninger endnu.",
+            "There are no active price monitors yet."
+          )}
+        </p>
+      `;
+
+    overlay.innerHTML = `
+      <div class="beast-modal beast-price-monitor-modal" role="dialog" aria-modal="true">
+        <div class="beast-modal-header">
+          <div>
+            <small>
+              ${t("Prisovervågning", "Price monitoring")}
+              · ${monitoredProducts.length}
+              ${t("aktive", "active")}
+            </small>
+            <h3>${t("Overvågede produkter", "Monitored products")}</h3>
+            <p>
+              ${t(
+                "Følg priser uafhængigt af indkøbslisten.",
+                "Track prices independently of the shopping list."
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="beast-modal-close"
+            data-close
+            aria-label="${t("Luk", "Close")}"
+          >
+            ${BeastCore.icon("close", { size: 22 })}
+          </button>
+        </div>
+
+        <div class="beast-modal-body">
+          <form class="beast-price-monitor-add" data-monitor-add-form>
+            <div>
+              <label for="beastPriceMonitorName">
+                ${t("Tilføj produkt", "Add product")}
+              </label>
+              <small>
+                ${t(
+                  "Produktet behøver ikke stå på indkøbslisten.",
+                  "The product does not need to be on the shopping list."
+                )}
+              </small>
+            </div>
+            <div class="beast-price-monitor-add-row">
+              <input
+                id="beastPriceMonitorName"
+                type="text"
+                autocomplete="off"
+                placeholder="${t("Fx Kærgården", "E.g. butter")}"
+                ${monitorBusy ? "disabled" : ""}
+              >
+              <button
+                type="submit"
+                class="beast-btn beast-btn-primary"
+                ${monitorBusy ? "disabled" : ""}
+              >
+                ${monitorBusy ? t("Gemmer…", "Saving…") : t("Tilføj", "Add")}
+              </button>
+            </div>
+          </form>
+
+          ${monitorError
+            ? `<div class="beast-shopping-error">${escapeHtml(monitorError)}</div>`
+            : ""}
+
+          <div class="beast-price-monitor-toolbar">
+            <strong>${t("Aktive overvågninger", "Active monitors")}</strong>
+            <label>
+              <span>${t("Statistikperiode", "Statistics period")}</span>
+              <select disabled title="${t("Aktiveres sammen med prishistorik", "Enabled with price history")}">
+                <option>${t("Seneste 28 dage", "Last 28 days")}</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="beast-price-monitor-list">
+            ${productMarkup}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    monitorModalEl = overlay;
+
+    overlay.querySelector("[data-close]")?.addEventListener("click", closePriceMonitorModal);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) closePriceMonitorModal();
+    });
+
+    overlay.querySelector("[data-monitor-add-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = overlay.querySelector("#beastPriceMonitorName");
+      const name = input?.value || "";
+      if (!normalizeTerm(name)) return;
+      await addManualPriceMonitor(name);
+    });
+
+    overlay.querySelectorAll("[data-monitor-stop]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const id = Number(button.dataset.monitorStop);
+        const product = monitoredProducts.find((entry) => Number(entry.id) === id);
+        if (!product) return;
+
+        const confirmed = window.confirm(
+          t(
+            `Stop prisovervågning af "${product.name}"? Den eksisterende historik bevares.`,
+            `Stop monitoring "${product.name}"? Existing history will be kept.`
+          )
+        );
+
+        if (confirmed) await removePriceMonitor(product);
+      });
+    });
   }
 
   async function getItems() {
@@ -375,10 +599,17 @@ window.BeastShopping = (() => {
             <h1>${t("Indkøb", "Shopping")}</h1>
             <p>${t("Din indkøbsliste med aktuelle tilbud fra butikker i nærheden.", "Your shopping list with nearby store offers.")}</p>
           </div>
-          <button type="button" class="beast-btn" data-shopping-refresh ${loading ? "disabled" : ""}>
-            ${BeastCore.icon("refresh", { size: 18 })}
-            ${loading ? t("Henter…", "Loading…") : t("Opdater", "Refresh")}
-          </button>
+          <div class="beast-shopping-header-actions">
+            <button type="button" class="beast-btn" data-shopping-monitor-open>
+              ${BeastCore.icon("chart", { size: 18 })}
+              ${t("Prisovervågning", "Price monitoring")}
+              <span>${monitoredProducts.length}</span>
+            </button>
+            <button type="button" class="beast-btn" data-shopping-refresh ${loading ? "disabled" : ""}>
+              ${BeastCore.icon("refresh", { size: 18 })}
+              ${loading ? t("Henter…", "Loading…") : t("Opdater", "Refresh")}
+            </button>
+          </div>
         </header>
         ${error ? `<div class="beast-shopping-error">${escapeHtml(error)}</div>` : ""}
         ${refreshWarning ? `<div class="beast-shopping-warning">${escapeHtml(refreshWarning)}</div>` : ""}
@@ -443,10 +674,14 @@ window.BeastShopping = (() => {
 
     containerEl.querySelector("[data-shopping-refresh]")?.addEventListener("click", () => refresh(true));
 
+    containerEl.querySelector("[data-shopping-monitor-open]")?.addEventListener("click", () => {
+      openPriceMonitorModal();
+    });
+
     containerEl.querySelector("[data-shopping-monitor]")?.addEventListener("click", () => {
       const item = items.find((entry) => entry.uid === selectedUid);
       const product = monitoredProductFor(item);
-      if (product) removePriceMonitor(product);
+      if (product) openPriceMonitorModal();
       else addPriceMonitor(item);
     });
 

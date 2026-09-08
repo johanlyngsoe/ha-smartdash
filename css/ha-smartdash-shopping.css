@@ -28,3 +28,201 @@
 @media(max-width:800px) { .beast-shopping-page { padding:14px; gap:14px; } .beast-shopping-header { align-items:flex-start; } .beast-shopping-header h1 { font-size:24px; } .beast-shopping-layout { grid-template-columns:1fr; gap:14px; } .beast-shopping-list,.beast-shopping-results { padding:14px; } }
 
 .beast-shopping-warning { padding:12px 16px; border:1px solid var(--warning); border-radius:12px; color:var(--warning); font-size:13px; }
+
+
+/* Price monitoring */
+.beast-shopping-header-actions {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.beast-shopping-header-actions [data-shopping-monitor-open] span {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:22px;
+  height:22px;
+  padding:0 7px;
+  border-radius:999px;
+  background:var(--accent-soft);
+  font-size:11px;
+  font-weight:700;
+}
+
+.beast-price-monitor-modal {
+  width:min(1040px, calc(100vw - 32px));
+  max-width:1040px;
+}
+.beast-price-monitor-modal .beast-modal-header p {
+  margin:5px 0 0;
+  color:var(--text-muted);
+  font-size:13px;
+}
+.beast-price-monitor-add {
+  display:grid;
+  grid-template-columns:minmax(180px,.65fr) minmax(280px,1.35fr);
+  gap:18px;
+  align-items:end;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--surface-secondary);
+}
+.beast-price-monitor-add label {
+  display:block;
+  margin-bottom:4px;
+  font-size:14px;
+  font-weight:700;
+}
+.beast-price-monitor-add small {
+  display:block;
+  color:var(--text-muted);
+  font-size:12px;
+}
+.beast-price-monitor-add-row {
+  display:flex;
+  gap:10px;
+}
+.beast-price-monitor-add-row input {
+  flex:1;
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+  color:inherit;
+  font:inherit;
+}
+.beast-price-monitor-toolbar {
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  gap:16px;
+  margin-top:20px;
+}
+.beast-price-monitor-toolbar > strong {
+  font-size:15px;
+}
+.beast-price-monitor-toolbar label {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text-muted);
+  font-size:12px;
+}
+.beast-price-monitor-toolbar select {
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:var(--surface-secondary);
+  color:var(--text-muted);
+}
+.beast-price-monitor-list {
+  min-width:0;
+  margin-top:12px;
+}
+
+.beast-price-monitor-table-wrap {
+  width:100%;
+  overflow-x:auto;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--surface-secondary);
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+}
+
+.beast-price-monitor-table {
+  width:100%;
+  min-width:790px;
+  border-collapse:collapse;
+  table-layout:auto;
+}
+
+.beast-price-monitor-table th,
+.beast-price-monitor-table td {
+  padding:13px 12px;
+  border-bottom:1px solid var(--border);
+  text-align:left;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+
+.beast-price-monitor-table thead th {
+  color:var(--text-muted);
+  background:var(--surface);
+  font-size:11px;
+  font-weight:700;
+}
+
+.beast-price-monitor-table tbody tr:last-child td {
+  border-bottom:none;
+}
+
+.beast-price-monitor-table tbody tr:hover {
+  background:var(--surface-hover);
+}
+
+.beast-price-monitor-table .is-number {
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+.beast-price-monitor-table .is-action {
+  width:1%;
+  text-align:right;
+}
+
+.beast-price-monitor-name {
+  min-width:180px;
+}
+
+.beast-price-monitor-name strong {
+  font-size:14px;
+}
+
+.beast-price-monitor-since {
+  color:var(--text-muted);
+  font-size:12px;
+}
+
+.beast-price-monitor-remove {
+  min-height:38px;
+  padding:0 13px;
+  white-space:nowrap;
+}
+
+.beast-price-monitor-history-note {
+  margin:9px 2px 0;
+  color:var(--text-muted);
+  font-size:11px;
+}
+
+@media(max-width:800px) {
+  .beast-shopping-header-actions {
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .beast-price-monitor-add {
+    grid-template-columns:1fr;
+  }
+  .beast-price-monitor-toolbar {
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
+
+/* Price monitor interaction layer */
+#beastPriceMonitorModal {
+  z-index: 3000;
+  pointer-events: auto;
+}
+
+#beastPriceMonitorModal .beast-price-monitor-modal,
+#beastPriceMonitorModal .beast-modal-header,
+#beastPriceMonitorModal .beast-modal-body,
+#beastPriceMonitorModal input,
+#beastPriceMonitorModal select,
+#beastPriceMonitorModal button {
+  pointer-events: auto;
+}

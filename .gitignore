@@ -9,3 +9,4 @@ data/*.tmp
 data/update-check-cache-*.json
 data/version-snapshots/
 
+data/*.db*

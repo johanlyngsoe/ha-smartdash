@@ -1,6 +1,7 @@
 window.BeastShopping = (() => {
   const TODO_ENTITY = "todo.google_keep_indkobsliste";
   const API_PATH = "./api/etilbudsavis/search";
+  const PRICE_MONITOR_API = "./api/price-monitor.php";
   const CACHE_MS = 30 * 60 * 1000;
   const MAX_RESULTS = 20;
 
@@ -17,6 +18,9 @@ window.BeastShopping = (() => {
   let requestId = 0;
   const cache = new Map();
   let locationPromise = null;
+  let monitoredProducts = [];
+  let monitorBusy = false;
+  let monitorError = "";
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -43,6 +47,84 @@ window.BeastShopping = (() => {
     if (!value) return "";
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("da-DK", { day: "numeric", month: "short" });
+  }
+
+  async function getMonitoredProducts() {
+    const response = await fetch(PRICE_MONITOR_API, { cache: "no-store" });
+    if (!response.ok) throw new Error(`Prisovervågning: HTTP ${response.status}`);
+    const payload = await response.json();
+    if (!Array.isArray(payload?.products)) {
+      throw new Error("Uventet svar fra prisovervågning");
+    }
+    return payload.products;
+  }
+
+  function monitoredProductFor(item) {
+    if (!item) return null;
+    const name = normalizeTerm(item.summary).toLocaleLowerCase("da-DK");
+    return monitoredProducts.find(
+      (product) => normalizeTerm(product.name).toLocaleLowerCase("da-DK") === name
+    ) || null;
+  }
+
+  async function addPriceMonitor(item) {
+    if (!item || monitorBusy) return;
+
+    monitorBusy = true;
+    monitorError = "";
+    render();
+
+    try {
+      const name = normalizeTerm(item.summary);
+      const response = await fetch(PRICE_MONITOR_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          search_term: name
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
+      }
+
+      monitoredProducts = await getMonitoredProducts();
+    } catch (err) {
+      monitorError = err.message || String(err);
+    } finally {
+      monitorBusy = false;
+      render();
+    }
+  }
+
+  async function removePriceMonitor(product) {
+    if (!product || monitorBusy) return;
+
+    monitorBusy = true;
+    monitorError = "";
+    render();
+
+    try {
+      const response = await fetch(PRICE_MONITOR_API, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: product.id })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || payload?.error || `HTTP ${response.status}`);
+      }
+
+      monitoredProducts = await getMonitoredProducts();
+    } catch (err) {
+      monitorError = err.message || String(err);
+    } finally {
+      monitorBusy = false;
+      render();
+    }
   }
 
   async function getItems() {
@@ -283,6 +365,7 @@ window.BeastShopping = (() => {
     const rawResult = selected ? offers.get(selected.uid) : null;
     const result = selected && rawResult ? relevantOffers(selected, rawResult) : rawResult;
     const broadReason = selected ? broadSearchReason(normalizeTerm(selected.summary)) : "";
+    const monitoredProduct = monitoredProductFor(selected);
 
     containerEl.innerHTML = `
       <div class="beast-shopping-page">
@@ -325,8 +408,20 @@ window.BeastShopping = (() => {
                 <small>${t("Tilbud", "Offers")}</small>
                 <h2>${selected ? escapeHtml(selected.summary) : t("Vælg en vare", "Select an item")}</h2>
               </div>
-              ${result ? `<span>${result.length} ${t("relevante", "relevant")}${rawResult ? ` · ${rawResult.length} ${t("hentet", "fetched")}` : ""}${searchLimits.get(selectedUid) ? " · " + t("maks. 20", "max. 20") : ""}</span>` : ""}
+              ${selected ? `
+                <button
+                  type="button"
+                  class="beast-btn"
+                  data-shopping-monitor
+                  ${monitorBusy ? "disabled" : ""}
+                >
+                  ${monitoredProduct
+                    ? t("✓ Pris overvåges", "✓ Price monitored")
+                    : t("Overvåg pris", "Monitor price")}
+                </button>
+              ` : result ? `<span>${result.length} ${t("relevante", "relevant")}${rawResult ? ` · ${rawResult.length} ${t("hentet", "fetched")}` : ""}${searchLimits.get(selectedUid) ? " · " + t("maks. 20", "max. 20") : ""}</span>` : ""}
             </div>
+            ${monitorError ? `<div class="beast-shopping-error">${escapeHtml(monitorError)}</div>` : ""}
             ${selected && searchErrors.has(selectedUid) ? `<div class="beast-shopping-error">${escapeHtml(searchErrors.get(selectedUid))}</div>` : ""}
             ${broadReason ? `<div class="beast-shopping-warning">${escapeHtml(broadReason)}</div>` : ""}
             ${selected
@@ -347,6 +442,14 @@ window.BeastShopping = (() => {
     `;
 
     containerEl.querySelector("[data-shopping-refresh]")?.addEventListener("click", () => refresh(true));
+
+    containerEl.querySelector("[data-shopping-monitor]")?.addEventListener("click", () => {
+      const item = items.find((entry) => entry.uid === selectedUid);
+      const product = monitoredProductFor(item);
+      if (product) removePriceMonitor(product);
+      else addPriceMonitor(item);
+    });
+
     containerEl.querySelectorAll("[data-shopping-uid]").forEach((button) => {
       button.addEventListener("click", () => {
         selectedUid = button.dataset.shoppingUid;
@@ -365,9 +468,13 @@ window.BeastShopping = (() => {
     render();
 
     try {
-      const nextItems = await getItems();
+      const [nextItems, nextMonitoredProducts] = await Promise.all([
+        getItems(),
+        getMonitoredProducts()
+      ]);
       if (currentRequest !== requestId) return;
       items = nextItems;
+      monitoredProducts = nextMonitoredProducts;
       if (!items.some((item) => item.uid === selectedUid)) selectedUid = items[0]?.uid || null;
       const activeUids = new Set(items.map((item) => item.uid));
       offers = new Map([...offers].filter(([uid]) => activeUids.has(uid)));

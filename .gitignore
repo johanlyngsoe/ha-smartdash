@@ -10,3 +10,5 @@ data/update-check-cache-*.json
 data/version-snapshots/
 
 data/*.db*
+data/price-collector.env
+__pycache__/

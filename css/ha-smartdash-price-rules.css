@@ -1,14 +1,36 @@
-.beast-price-monitor-actions {
+.beast-price-monitor-table .beast-price-monitor-actions {
+  width:76px;
+  min-width:76px;
+  padding-left:8px;
+  padding-right:10px;
   display:flex;
   justify-content:flex-end;
   align-items:center;
-  gap:8px;
+  gap:6px;
 }
 
-.beast-price-monitor-edit {
-  min-height:38px;
-  padding:0 13px;
-  white-space:nowrap;
+.beast-price-monitor-icon-action {
+  width:32px;
+  min-width:32px;
+  height:32px;
+  min-height:32px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:10px;
+  line-height:1;
+}
+
+.beast-price-monitor-icon-action svg {
+  width:16px;
+  height:16px;
+  display:block;
+  pointer-events:none;
+}
+
+.beast-price-monitor-icon-action.is-remove:hover {
+  color:var(--danger);
 }
 
 .beast-price-rule-overlay {
@@ -108,7 +130,8 @@
     grid-template-columns:1fr;
   }
 
-  .beast-price-monitor-actions {
-    flex-wrap:wrap;
+  .beast-price-monitor-table .beast-price-monitor-actions {
+    width:76px;
+    min-width:76px;
   }
 }

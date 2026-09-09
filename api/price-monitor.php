@@ -106,6 +106,97 @@ try {
             "
         )->fetchAll();
 
+        $periodDays = 28;
+        $localTimezone = new DateTimeZone("Europe/Copenhagen");
+        $startDate = (new DateTimeImmutable("now", $localTimezone))
+            ->modify("-" . ($periodDays - 1) . " days")
+            ->format("Y-m-d");
+
+        $statStmt = $db->prepare(
+            "
+            SELECT
+                observed_date,
+                CASE
+                    WHEN lower(quantity_unit) IN ('g', 'kg', 'hg') THEN 'kg'
+                    WHEN lower(quantity_unit) IN ('ml', 'cl', 'dl', 'l') THEN 'liter'
+                    ELSE NULL
+                END AS statistic_unit,
+                MIN(unit_price) AS daily_best
+            FROM price_observations
+            WHERE monitored_product_id = :product_id
+              AND observed_date >= :start_date
+              AND classification = 'certain'
+              AND unit_price IS NOT NULL
+            GROUP BY
+                observed_date,
+                statistic_unit
+            HAVING statistic_unit IS NOT NULL
+            ORDER BY observed_date
+            "
+        );
+
+        foreach ($rows as &$row) {
+            $statStmt->execute([
+                ":product_id" => (int)$row["id"],
+                ":start_date" => $startDate,
+            ]);
+
+            $dailyRows = $statStmt->fetchAll();
+            $units = [];
+
+            foreach ($dailyRows as $dailyRow) {
+                $unit = (string)($dailyRow["statistic_unit"] ?? "");
+                if ($unit !== "") {
+                    $units[$unit] = true;
+                }
+            }
+
+            $statistics = [
+                "period_days" => $periodDays,
+                "days" => 0,
+                "unit" => null,
+                "latest" => null,
+                "latest_date" => null,
+                "average" => null,
+                "lowest" => null,
+                "highest" => null,
+            ];
+
+            if (count($units) === 1) {
+                $unit = array_key_first($units);
+                $dailyPrices = [];
+                $latestDate = null;
+                $latestPrice = null;
+
+                foreach ($dailyRows as $dailyRow) {
+                    if (($dailyRow["statistic_unit"] ?? null) !== $unit) {
+                        continue;
+                    }
+
+                    $price = (float)$dailyRow["daily_best"];
+                    $dailyPrices[] = $price;
+                    $latestDate = $dailyRow["observed_date"];
+                    $latestPrice = $price;
+                }
+
+                if ($dailyPrices) {
+                    $statistics = [
+                        "period_days" => $periodDays,
+                        "days" => count($dailyPrices),
+                        "unit" => $unit,
+                        "latest" => $latestPrice,
+                        "latest_date" => $latestDate,
+                        "average" => array_sum($dailyPrices) / count($dailyPrices),
+                        "lowest" => min($dailyPrices),
+                        "highest" => max($dailyPrices),
+                    ];
+                }
+            }
+
+            $row["statistics"] = $statistics;
+        }
+        unset($row);
+
         respond([
             "products" => $rows,
         ]);

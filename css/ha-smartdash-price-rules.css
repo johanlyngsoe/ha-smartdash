@@ -1,0 +1,114 @@
+.beast-price-monitor-actions {
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+}
+
+.beast-price-monitor-edit {
+  min-height:38px;
+  padding:0 13px;
+  white-space:nowrap;
+}
+
+.beast-price-rule-overlay {
+  z-index:3100;
+  pointer-events:auto;
+}
+
+.beast-price-rule-modal {
+  width:min(860px, calc(100vw - 32px));
+  max-width:860px;
+}
+
+.beast-price-rule-modal .beast-modal-header p {
+  margin:5px 0 0;
+  color:var(--text-muted);
+  font-size:13px;
+  max-width:680px;
+}
+
+.beast-price-rule-form {
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+.beast-price-rule-grid {
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:14px;
+}
+
+.beast-price-rule-field {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+
+.beast-price-rule-field > span {
+  font-size:13px;
+  font-weight:700;
+}
+
+.beast-price-rule-field > small,
+.beast-price-rule-help {
+  color:var(--text-muted);
+  font-size:11px;
+  line-height:1.45;
+}
+
+.beast-price-rule-field input,
+.beast-price-rule-field textarea {
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  padding:10px 11px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface-secondary);
+  color:inherit;
+  font:inherit;
+}
+
+.beast-price-rule-field textarea {
+  resize:vertical;
+  min-height:132px;
+  line-height:1.45;
+}
+
+.beast-price-rule-help {
+  margin:0;
+}
+
+.beast-price-rule-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+}
+
+.beast-price-rule-status {
+  margin-right:auto;
+  color:var(--text-muted);
+  font-size:12px;
+}
+
+.beast-price-rule-status.is-success {
+  color:var(--success);
+}
+
+.beast-price-rule-status.is-error {
+  color:var(--danger);
+}
+
+@media(max-width:800px) {
+  .beast-price-rule-grid {
+    grid-template-columns:1fr;
+  }
+
+  .beast-price-monitor-actions {
+    flex-wrap:wrap;
+  }
+}

@@ -293,6 +293,43 @@ def classify_offer(product, offer):
     return classify_offer_legacy(product["name"], offer)
 
 
+def reclassify_product_history(db, product):
+    rows = db.execute(
+        """
+        SELECT id, heading, description, classification
+        FROM price_observations
+        WHERE monitored_product_id = ?
+        """,
+        (product["id"],),
+    ).fetchall()
+
+    changed = 0
+
+    for row_id, heading, description, old_classification in rows:
+        new_classification = classify_offer(
+            product,
+            {
+                "heading": heading,
+                "description": description,
+            },
+        )
+
+        if new_classification == old_classification:
+            continue
+
+        db.execute(
+            """
+            UPDATE price_observations
+            SET classification = ?
+            WHERE id = ?
+            """,
+            (new_classification, row_id),
+        )
+        changed += 1
+
+    return changed
+
+
 def get_quantity(offer):
     quantity = offer.get("quantity") or {}
 
@@ -387,9 +424,24 @@ def observation_from_offer(product, offer, observed_at):
 
 
 def save_observation(db, observation):
-    cursor = db.execute(
+    existing = db.execute(
         """
-        INSERT OR IGNORE INTO price_observations (
+        SELECT id
+        FROM price_observations
+        WHERE monitored_product_id = ?
+          AND observed_date = ?
+          AND source_offer_id = ?
+        """,
+        (
+            observation["monitored_product_id"],
+            observation["observed_date"],
+            observation["source_offer_id"],
+        ),
+    ).fetchone()
+
+    db.execute(
+        """
+        INSERT INTO price_observations (
             monitored_product_id,
             observed_at,
             observed_date,
@@ -406,6 +458,19 @@ def save_observation(db, observation):
             classification
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(monitored_product_id, observed_date, source_offer_id)
+        DO UPDATE SET
+            observed_at = excluded.observed_at,
+            store = excluded.store,
+            heading = excluded.heading,
+            description = excluded.description,
+            price = excluded.price,
+            quantity_value = excluded.quantity_value,
+            quantity_unit = excluded.quantity_unit,
+            unit_price = excluded.unit_price,
+            offer_start = excluded.offer_start,
+            offer_end = excluded.offer_end,
+            classification = excluded.classification
         """,
         (
             observation["monitored_product_id"],
@@ -425,7 +490,7 @@ def save_observation(db, observation):
         ),
     )
 
-    return cursor.rowcount == 1
+    return "updated" if existing else "inserted"
 
 
 def main():
@@ -476,7 +541,9 @@ def main():
         observed_at = datetime.now(timezone.utc)
 
         total_found = 0
-        total_saved = 0
+        total_inserted = 0
+        total_updated = 0
+        total_reclassified = 0
 
         for product in products:
             print("=" * 72)
@@ -489,6 +556,12 @@ def main():
                 print(f"  include_all: {', '.join(product['include_all'])}")
             if product["exclude_any"]:
                 print(f"  exclude_any: {', '.join(product['exclude_any'])}")
+
+            if args.write:
+                reclassified = reclassify_product_history(db, product)
+                total_reclassified += reclassified
+                if reclassified:
+                    print(f"  Historik genklassificeret: {reclassified}")
 
             offers = search_offers(
                 session,
@@ -536,8 +609,11 @@ def main():
                 )
 
                 if args.write:
-                    if save_observation(db, observation):
-                        total_saved += 1
+                    result = save_observation(db, observation)
+                    if result == "inserted":
+                        total_inserted += 1
+                    else:
+                        total_updated += 1
 
             print(
                 "Klassifikation: "
@@ -551,7 +627,9 @@ def main():
             db.commit()
             print(
                 f"Færdig: {total_found} observationer fundet, "
-                f"{total_saved} nye gemt."
+                f"{total_inserted} nye gemt, "
+                f"{total_updated} eksisterende opdateret, "
+                f"{total_reclassified} historiske klassifikationer ændret."
             )
         else:
             print(

@@ -24,6 +24,82 @@ function normalizeName($value) {
     return $value;
 }
 
+function normalizeTerms($value) {
+    if (is_string($value)) {
+        $value = preg_split('/[,\n]+/u', $value);
+    }
+
+    if (!is_array($value)) {
+        return [];
+    }
+
+    $result = [];
+    $seen = [];
+
+    foreach ($value as $term) {
+        $term = normalizeName($term);
+        if ($term === '') {
+            continue;
+        }
+
+        $key = mb_strtolower($term, 'UTF-8');
+        if (isset($seen[$key])) {
+            continue;
+        }
+
+        $seen[$key] = true;
+        $result[] = $term;
+    }
+
+    return $result;
+}
+
+function encodeTerms($terms) {
+    return json_encode(
+        normalizeTerms($terms),
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+}
+
+function decodeTerms($value) {
+    if ($value === null || $value === '') {
+        return [];
+    }
+
+    $decoded = json_decode((string)$value, true);
+    return normalizeTerms(is_array($decoded) ? $decoded : []);
+}
+
+function addRuleColumns(PDO $db) {
+    $columns = [];
+    foreach ($db->query("PRAGMA table_info(monitored_products)")->fetchAll() as $column) {
+        $columns[$column['name']] = true;
+    }
+
+    $definitions = [
+        'include_any' => "TEXT NOT NULL DEFAULT '[]'",
+        'include_all' => "TEXT NOT NULL DEFAULT '[]'",
+        'exclude_any' => "TEXT NOT NULL DEFAULT '[]'",
+    ];
+
+    foreach ($definitions as $name => $definition) {
+        if (!isset($columns[$name])) {
+            $db->exec("ALTER TABLE monitored_products ADD COLUMN {$name} {$definition}");
+        }
+    }
+}
+
+function presentProduct($row) {
+    if (!$row) {
+        return $row;
+    }
+
+    $row['include_any'] = decodeTerms($row['include_any'] ?? null);
+    $row['include_all'] = decodeTerms($row['include_all'] ?? null);
+    $row['exclude_any'] = decodeTerms($row['exclude_any'] ?? null);
+    return $row;
+}
+
 try {
     $db = new PDO(
         "sqlite:" . $dbFile,
@@ -47,10 +123,15 @@ try {
             search_term TEXT NOT NULL,
             active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            include_any TEXT NOT NULL DEFAULT '[]',
+            include_all TEXT NOT NULL DEFAULT '[]',
+            exclude_any TEXT NOT NULL DEFAULT '[]'
         )
         "
     );
+
+    addRuleColumns($db);
 
     $db->exec(
         "
@@ -99,7 +180,10 @@ try {
                 search_term,
                 active,
                 created_at,
-                updated_at
+                updated_at,
+                include_any,
+                include_all,
+                exclude_any
             FROM monitored_products
             WHERE active = 1
             ORDER BY name COLLATE NOCASE
@@ -136,6 +220,8 @@ try {
         );
 
         foreach ($rows as &$row) {
+            $row = presentProduct($row);
+
             $statStmt->execute([
                 ":product_id" => (int)$row["id"],
                 ":start_date" => $startDate,
@@ -221,6 +307,10 @@ try {
             respond(["error" => "name_required"], 400);
         }
 
+        $includeAny = normalizeTerms($body['include_any'] ?? []);
+        $includeAll = normalizeTerms($body['include_all'] ?? []);
+        $excludeAny = normalizeTerms($body['exclude_any'] ?? []);
+
         $normalizedName = mb_strtolower($name, "UTF-8");
         $now = gmdate("c");
 
@@ -232,7 +322,10 @@ try {
                 search_term,
                 active,
                 created_at,
-                updated_at
+                updated_at,
+                include_any,
+                include_all,
+                exclude_any
             )
             VALUES (
                 :name,
@@ -240,13 +333,19 @@ try {
                 :search_term,
                 1,
                 :created_at,
-                :updated_at
+                :updated_at,
+                :include_any,
+                :include_all,
+                :exclude_any
             )
             ON CONFLICT(normalized_name) DO UPDATE SET
                 name = excluded.name,
                 search_term = excluded.search_term,
                 active = 1,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                include_any = excluded.include_any,
+                include_all = excluded.include_all,
+                exclude_any = excluded.exclude_any
             "
         );
 
@@ -256,6 +355,9 @@ try {
             ":search_term" => $searchTerm,
             ":created_at" => $now,
             ":updated_at" => $now,
+            ":include_any" => encodeTerms($includeAny),
+            ":include_all" => encodeTerms($includeAll),
+            ":exclude_any" => encodeTerms($excludeAny),
         ]);
 
         $stmt = $db->prepare(
@@ -266,7 +368,10 @@ try {
                 search_term,
                 active,
                 created_at,
-                updated_at
+                updated_at,
+                include_any,
+                include_all,
+                exclude_any
             FROM monitored_products
             WHERE normalized_name = :normalized_name
             "
@@ -278,7 +383,7 @@ try {
 
         respond([
             "success" => true,
-            "product" => $stmt->fetch(),
+            "product" => presentProduct($stmt->fetch()),
         ]);
     }
 

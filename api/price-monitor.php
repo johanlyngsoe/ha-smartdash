@@ -24,6 +24,20 @@ function normalizeName($value) {
     return $value;
 }
 
+function normalizeDate($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return null;
+    }
+
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    if (!$date || $date->format('Y-m-d') !== $value) {
+        return null;
+    }
+
+    return $value;
+}
+
 function normalizeTerms($value) {
     if (is_string($value)) {
         $value = preg_split('/[,\n]+/u', $value);
@@ -70,7 +84,7 @@ function decodeTerms($value) {
     return normalizeTerms(is_array($decoded) ? $decoded : []);
 }
 
-function addRuleColumns(PDO $db) {
+function addProductColumns(PDO $db) {
     $columns = [];
     foreach ($db->query("PRAGMA table_info(monitored_products)")->fetchAll() as $column) {
         $columns[$column['name']] = true;
@@ -80,6 +94,7 @@ function addRuleColumns(PDO $db) {
         'include_any' => "TEXT NOT NULL DEFAULT '[]'",
         'include_all' => "TEXT NOT NULL DEFAULT '[]'",
         'exclude_any' => "TEXT NOT NULL DEFAULT '[]'",
+        'statistics_from_date' => "TEXT",
     ];
 
     foreach ($definitions as $name => $definition) {
@@ -97,6 +112,7 @@ function presentProduct($row) {
     $row['include_any'] = decodeTerms($row['include_any'] ?? null);
     $row['include_all'] = decodeTerms($row['include_all'] ?? null);
     $row['exclude_any'] = decodeTerms($row['exclude_any'] ?? null);
+    $row['statistics_from_date'] = normalizeDate($row['statistics_from_date'] ?? null);
     return $row;
 }
 
@@ -126,12 +142,13 @@ try {
             updated_at TEXT NOT NULL,
             include_any TEXT NOT NULL DEFAULT '[]',
             include_all TEXT NOT NULL DEFAULT '[]',
-            exclude_any TEXT NOT NULL DEFAULT '[]'
+            exclude_any TEXT NOT NULL DEFAULT '[]',
+            statistics_from_date TEXT
         )
         "
     );
 
-    addRuleColumns($db);
+    addProductColumns($db);
 
     $db->exec(
         "
@@ -183,7 +200,8 @@ try {
                 updated_at,
                 include_any,
                 include_all,
-                exclude_any
+                exclude_any,
+                statistics_from_date
             FROM monitored_products
             WHERE active = 1
             ORDER BY name COLLATE NOCASE
@@ -221,10 +239,18 @@ try {
 
         foreach ($rows as &$row) {
             $row = presentProduct($row);
+            $effectiveStartDate = $startDate;
+
+            if (
+                !empty($row['statistics_from_date']) &&
+                $row['statistics_from_date'] > $effectiveStartDate
+            ) {
+                $effectiveStartDate = $row['statistics_from_date'];
+            }
 
             $statStmt->execute([
                 ":product_id" => (int)$row["id"],
-                ":start_date" => $startDate,
+                ":start_date" => $effectiveStartDate,
             ]);
 
             $dailyRows = $statStmt->fetchAll();
@@ -239,6 +265,7 @@ try {
 
             $statistics = [
                 "period_days" => $periodDays,
+                "from_date" => $effectiveStartDate,
                 "days" => 0,
                 "unit" => null,
                 "latest" => null,
@@ -268,6 +295,7 @@ try {
                 if ($dailyPrices) {
                     $statistics = [
                         "period_days" => $periodDays,
+                        "from_date" => $effectiveStartDate,
                         "days" => count($dailyPrices),
                         "unit" => $unit,
                         "latest" => $latestPrice,
@@ -307,11 +335,48 @@ try {
             respond(["error" => "name_required"], 400);
         }
 
-        $includeAny = normalizeTerms($body['include_any'] ?? []);
-        $includeAll = normalizeTerms($body['include_all'] ?? []);
-        $excludeAny = normalizeTerms($body['exclude_any'] ?? []);
-
         $normalizedName = mb_strtolower($name, "UTF-8");
+        $localTimezone = new DateTimeZone("Europe/Copenhagen");
+        $todayLocal = (new DateTimeImmutable("now", $localTimezone))->format("Y-m-d");
+
+        $existingStmt = $db->prepare(
+            "
+            SELECT
+                search_term,
+                include_any,
+                include_all,
+                exclude_any,
+                statistics_from_date
+            FROM monitored_products
+            WHERE normalized_name = :normalized_name
+            "
+        );
+        $existingStmt->execute([
+            ":normalized_name" => $normalizedName,
+        ]);
+        $existing = $existingStmt->fetch() ?: null;
+
+        $includeAny = array_key_exists('include_any', $body)
+            ? normalizeTerms($body['include_any'])
+            : decodeTerms($existing['include_any'] ?? null);
+        $includeAll = array_key_exists('include_all', $body)
+            ? normalizeTerms($body['include_all'])
+            : decodeTerms($existing['include_all'] ?? null);
+        $excludeAny = array_key_exists('exclude_any', $body)
+            ? normalizeTerms($body['exclude_any'])
+            : decodeTerms($existing['exclude_any'] ?? null);
+
+        $statisticsFromDate = array_key_exists('statistics_from_date', $body)
+            ? normalizeDate($body['statistics_from_date'])
+            : normalizeDate($existing['statistics_from_date'] ?? null);
+
+        if (
+            $existing &&
+            normalizeName($existing['search_term'] ?? '') !== $searchTerm
+        ) {
+            $statisticsFromDate = $todayLocal;
+        }
+
         $now = gmdate("c");
 
         $stmt = $db->prepare(
@@ -325,7 +390,8 @@ try {
                 updated_at,
                 include_any,
                 include_all,
-                exclude_any
+                exclude_any,
+                statistics_from_date
             )
             VALUES (
                 :name,
@@ -336,7 +402,8 @@ try {
                 :updated_at,
                 :include_any,
                 :include_all,
-                :exclude_any
+                :exclude_any,
+                :statistics_from_date
             )
             ON CONFLICT(normalized_name) DO UPDATE SET
                 name = excluded.name,
@@ -345,7 +412,8 @@ try {
                 updated_at = excluded.updated_at,
                 include_any = excluded.include_any,
                 include_all = excluded.include_all,
-                exclude_any = excluded.exclude_any
+                exclude_any = excluded.exclude_any,
+                statistics_from_date = excluded.statistics_from_date
             "
         );
 
@@ -358,6 +426,7 @@ try {
             ":include_any" => encodeTerms($includeAny),
             ":include_all" => encodeTerms($includeAll),
             ":exclude_any" => encodeTerms($excludeAny),
+            ":statistics_from_date" => $statisticsFromDate,
         ]);
 
         $stmt = $db->prepare(
@@ -371,7 +440,8 @@ try {
                 updated_at,
                 include_any,
                 include_all,
-                exclude_any
+                exclude_any,
+                statistics_from_date
             FROM monitored_products
             WHERE normalized_name = :normalized_name
             "

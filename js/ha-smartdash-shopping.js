@@ -44,6 +44,11 @@ window.BeastShopping = (() => {
       : "–";
   }
 
+  function statisticMoney(value, unit) {
+    const formatted = money(value);
+    return formatted === "–" || !unit ? "–" : `${formatted}/${unit}`;
+  }
+
   function dateLabel(value) {
     if (!value) return "";
     const date = new Date(value);
@@ -202,10 +207,10 @@ window.BeastShopping = (() => {
                   <td class="beast-price-monitor-since">
                     ${escapeHtml(monitoredSince(product.created_at))}
                   </td>
-                  <td class="is-number">–</td>
-                  <td class="is-number">–</td>
-                  <td class="is-number">–</td>
-                  <td class="is-number">–</td>
+                  <td class="is-number">${escapeHtml(statisticMoney(product.statistics?.latest, product.statistics?.unit))}</td>
+                  <td class="is-number">${escapeHtml(statisticMoney(product.statistics?.average, product.statistics?.unit))}</td>
+                  <td class="is-number">${escapeHtml(statisticMoney(product.statistics?.lowest, product.statistics?.unit))}</td>
+                  <td class="is-number">${escapeHtml(statisticMoney(product.statistics?.highest, product.statistics?.unit))}</td>
                   <td class="is-action">
                     <button
                       type="button"
@@ -223,8 +228,8 @@ window.BeastShopping = (() => {
         </div>
         <p class="beast-price-monitor-history-note">
           ${t(
-            "Prisstatistik vises, når den automatiske prisindsamling er aktiveret.",
-            "Price statistics will appear when automatic price collection is enabled."
+            "28-dages statistik baseret på dagens laveste sikre enhedspris. Mulige og afviste match indgår ikke.",
+            "28-day statistics based on each day's lowest certain unit price. Possible and rejected matches are excluded."
           )}
         </p>
       `
@@ -303,7 +308,7 @@ window.BeastShopping = (() => {
             <strong>${t("Aktive overvågninger", "Active monitors")}</strong>
             <label>
               <span>${t("Statistikperiode", "Statistics period")}</span>
-              <select disabled title="${t("Aktiveres sammen med prishistorik", "Enabled with price history")}">
+              <select disabled title="${t("Fast periode i første version", "Fixed period in the first version")}">
                 <option>${t("Seneste 28 dage", "Last 28 days")}</option>
               </select>
             </label>

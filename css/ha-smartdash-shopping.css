@@ -168,6 +168,10 @@
   font-variant-numeric:tabular-nums;
 }
 
+.beast-price-monitor-table tbody .is-number {
+  font-size:14px;
+}
+
 .beast-price-monitor-table .is-action {
   width:1%;
   text-align:right;

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -105,15 +106,60 @@ def get_ha_location(session, ha_url, ha_token):
     }
 
 
+def parse_terms(value):
+    if not value:
+        return []
+
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    result = []
+    seen = set()
+
+    for item in parsed:
+        term = " ".join(str(item or "").strip().split())
+        key = term.casefold()
+        if not term or key in seen:
+            continue
+        seen.add(key)
+        result.append(term)
+
+    return result
+
+
 def get_active_products(db):
-    return db.execute(
+    rows = db.execute(
         """
-        SELECT id, name, search_term
+        SELECT
+            id,
+            name,
+            search_term,
+            include_any,
+            include_all,
+            exclude_any
         FROM monitored_products
         WHERE active = 1
         ORDER BY id
         """
     ).fetchall()
+
+    products = []
+    for row in rows:
+        products.append({
+            "id": row[0],
+            "name": row[1],
+            "search_term": row[2],
+            "include_any": parse_terms(row[3]),
+            "include_all": parse_terms(row[4]),
+            "exclude_any": parse_terms(row[5]),
+        })
+
+    return products
 
 
 def search_offers(session, term, location, radius, limit):
@@ -148,7 +194,7 @@ def text_for_offer(offer):
     return f"{heading} {description}".casefold()
 
 
-def classify_offer(product_name, offer):
+def classify_offer_legacy(product_name, offer):
     product = product_name.casefold()
     text = text_for_offer(offer)
 
@@ -220,6 +266,33 @@ def classify_offer(product_name, offer):
     return "possible"
 
 
+def classify_offer(product, offer):
+    text = text_for_offer(offer)
+    include_any = [term.casefold() for term in product["include_any"]]
+    include_all = [term.casefold() for term in product["include_all"]]
+    exclude_any = [term.casefold() for term in product["exclude_any"]]
+
+    has_positive_rules = bool(include_any or include_all)
+    has_rules = bool(has_positive_rules or exclude_any)
+
+    if not has_rules:
+        return classify_offer_legacy(product["name"], offer)
+
+    if any(term in text for term in exclude_any):
+        return "rejected"
+
+    if include_all and not all(term in text for term in include_all):
+        return "possible"
+
+    if include_any and not any(term in text for term in include_any):
+        return "possible"
+
+    if has_positive_rules:
+        return "certain"
+
+    return classify_offer_legacy(product["name"], offer)
+
+
 def get_quantity(offer):
     quantity = offer.get("quantity") or {}
 
@@ -277,7 +350,7 @@ def get_quantity(offer):
     return total, symbol, unit_price
 
 
-def observation_from_offer(product_id, product_name, offer, observed_at):
+def observation_from_offer(product, offer, observed_at):
     pricing = offer.get("pricing") or {}
     branding = offer.get("branding") or {}
 
@@ -296,7 +369,7 @@ def observation_from_offer(product_id, product_name, offer, observed_at):
         )
 
     return {
-        "monitored_product_id": product_id,
+        "monitored_product_id": product["id"],
         "observed_at": observed_at.astimezone(timezone.utc).isoformat(),
         "observed_date": observed_at.astimezone(LOCAL_TZ).date().isoformat(),
         "source_offer_id": source_offer_id,
@@ -309,7 +382,7 @@ def observation_from_offer(product_id, product_name, offer, observed_at):
         "unit_price": unit_price,
         "offer_start": offer.get("run_from"),
         "offer_end": offer.get("run_till"),
-        "classification": classify_offer(product_name, offer),
+        "classification": classify_offer(product, offer),
     }
 
 
@@ -405,13 +478,21 @@ def main():
         total_found = 0
         total_saved = 0
 
-        for product_id, product_name, search_term in products:
+        for product in products:
             print("=" * 72)
-            print(f"{product_name}  [search: {search_term}]")
+            print(
+                f"{product['name']}  [search: {product['search_term']}]"
+            )
+            if product["include_any"]:
+                print(f"  include_any: {', '.join(product['include_any'])}")
+            if product["include_all"]:
+                print(f"  include_all: {', '.join(product['include_all'])}")
+            if product["exclude_any"]:
+                print(f"  exclude_any: {', '.join(product['exclude_any'])}")
 
             offers = search_offers(
                 session,
-                search_term,
+                product["search_term"],
                 location,
                 radius,
                 limit,
@@ -427,8 +508,7 @@ def main():
 
             for offer in offers:
                 observation = observation_from_offer(
-                    product_id,
-                    product_name,
+                    product,
                     offer,
                     observed_at,
                 )

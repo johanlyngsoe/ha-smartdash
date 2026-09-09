@@ -64,6 +64,7 @@
     }
 
     const searchTerm = form.querySelector('[name="search_term"]')?.value.trim() || product.name;
+    const statisticsFromDate = form.querySelector('[name="statistics_from_date"]')?.value || "";
     const includeAny = textToTerms(form.querySelector('[name="include_any"]')?.value);
     const includeAll = textToTerms(form.querySelector('[name="include_all"]')?.value);
     const excludeAny = textToTerms(form.querySelector('[name="exclude_any"]')?.value);
@@ -75,6 +76,7 @@
         body: JSON.stringify({
           name: product.name,
           search_term: searchTerm,
+          statistics_from_date: statisticsFromDate,
           include_any: includeAny,
           include_all: includeAll,
           exclude_any: excludeAny
@@ -129,6 +131,15 @@
               <span>${t("Søg efter", "Search for")}</span>
               <small>${t("Det brede søgeord, som sendes til eTilbudsavis.", "The broad search term sent to eTilbudsavis.")}</small>
               <input name="search_term" type="text" value="${escapeHtml(product.search_term || product.name)}" autocomplete="off">
+            </label>
+
+            <label class="beast-price-rule-field">
+              <span>${t("Statistik fra", "Statistics from")}</span>
+              <small>${t(
+                "Observationer før denne dato gemmes stadig, men indgår ikke i statistikken. Ved ændring af søgeord sættes datoen automatisk til i dag.",
+                "Observations before this date are retained but excluded from statistics. Changing the search term automatically resets this date to today."
+              )}</small>
+              <input name="statistics_from_date" type="date" value="${escapeHtml(product.statistics_from_date || "")}">
             </label>
 
             <div class="beast-price-rule-grid">

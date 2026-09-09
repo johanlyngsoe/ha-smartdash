@@ -12,6 +12,16 @@
   const english = () => String(document.documentElement.lang || "").toLowerCase().startsWith("en");
   const t = (da, en) => english() ? en : da;
 
+  const pencilIcon = () => `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 20h4.2L19 9.2a2.1 2.1 0 0 0 0-3L17.8 5a2.1 2.1 0 0 0-3 0L4 15.8V20Zm2-3.4L16.2 6.4a.2.2 0 0 1 .3 0l1.2 1.2a.2.2 0 0 1 0 .3L7.4 18H6v-1.4Z" fill="currentColor"/>
+    </svg>`;
+
+  const trashIcon = () => `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-.7 10.1A2 2 0 0 1 14.3 21H9.7a2 2 0 0 1-2-1.9L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z" fill="currentColor"/>
+    </svg>`;
+
   function termsToText(value) {
     return Array.isArray(value) ? value.join("\n") : "";
   }
@@ -191,15 +201,24 @@
       const id = Number(removeButton.dataset.monitorStop);
       if (!id || removeButton.parentElement?.querySelector(`[data-monitor-edit="${id}"]`)) return;
 
+      const actionCell = removeButton.parentElement;
+      actionCell?.classList.add("beast-price-monitor-actions");
+
+      removeButton.classList.add("beast-price-monitor-icon-action", "is-remove");
+      removeButton.innerHTML = trashIcon();
+      removeButton.title = t("Fjern overvågning", "Remove monitor");
+      removeButton.setAttribute("aria-label", t("Fjern overvågning", "Remove monitor"));
+
       const editButton = document.createElement("button");
       editButton.type = "button";
-      editButton.className = "beast-btn beast-price-monitor-edit";
+      editButton.className = "beast-btn beast-price-monitor-edit beast-price-monitor-icon-action";
       editButton.dataset.monitorEdit = String(id);
-      editButton.textContent = t("Rediger", "Edit");
+      editButton.innerHTML = pencilIcon();
+      editButton.title = t("Rediger matchregler", "Edit matching rules");
+      editButton.setAttribute("aria-label", t("Rediger matchregler", "Edit matching rules"));
       editButton.addEventListener("click", () => editProduct(id));
 
       removeButton.before(editButton);
-      removeButton.parentElement?.classList.add("beast-price-monitor-actions");
     });
   }
 

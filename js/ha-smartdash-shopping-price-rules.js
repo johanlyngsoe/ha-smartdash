@@ -68,16 +68,9 @@
     return response.clone().json().then((payload) => {
       if (!Array.isArray(payload)) return response;
 
-      const ranked = payload
-        .map((offer, index) => ({ offer, index, classification: classify(product, offer) }))
-        .filter((entry) => entry.classification !== "rejected")
-        .sort((a, b) => {
-          const rank = { certain: 0, possible: 1 };
-          return (rank[a.classification] - rank[b.classification]) || (a.index - b.index);
-        })
-        .map((entry) => entry.offer);
+      const certain = payload.filter((offer) => classify(product, offer) === "certain");
 
-      return new Response(JSON.stringify(ranked), {
+      return new Response(JSON.stringify(certain), {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers

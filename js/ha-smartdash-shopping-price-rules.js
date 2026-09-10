@@ -25,6 +25,10 @@
       : [];
   }
 
+  function hasPositiveRules(product) {
+    return ruleTerms(product?.include_any).length > 0 || ruleTerms(product?.include_all).length > 0;
+  }
+
   async function monitoredProducts() {
     if (!productsPromise) {
       productsPromise = originalFetch(PRICE_MONITOR_API, { cache: "no-store" })
@@ -55,10 +59,7 @@
     const excludeAny = ruleTerms(product?.exclude_any);
 
     if (excludeAny.some((term) => text.includes(term))) return "rejected";
-
-    const hasPositiveRules = includeAny.length > 0 || includeAll.length > 0;
-    if (!hasPositiveRules) return "possible";
-
+    if (!includeAny.length && !includeAll.length) return "possible";
     if (includeAll.length && !includeAll.every((term) => text.includes(term))) return "possible";
     if (includeAny.length && !includeAny.some((term) => text.includes(term))) return "possible";
     return "certain";
@@ -95,35 +96,40 @@
     return price / normalizedQuantity;
   }
 
+  function sortOffers(offers) {
+    return offers
+      .map((offer, index) => ({ offer, index, unitPrice: comparableUnitPrice(offer) }))
+      .sort((a, b) => {
+        const aHasUnitPrice = Number.isFinite(a.unitPrice);
+        const bHasUnitPrice = Number.isFinite(b.unitPrice);
+        if (aHasUnitPrice && bHasUnitPrice) return (a.unitPrice - b.unitPrice) || (a.index - b.index);
+        if (aHasUnitPrice) return -1;
+        if (bHasUnitPrice) return 1;
+        return a.index - b.index;
+      })
+      .map((entry) => entry.offer);
+  }
+
+  function responseWithOffers(response, offers) {
+    return new Response(JSON.stringify(offers), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    });
+  }
+
+  function sortedResponse(response) {
+    return response.clone().json().then((payload) => {
+      if (!Array.isArray(payload)) return response;
+      return responseWithOffers(response, sortOffers(payload));
+    }).catch(() => response);
+  }
+
   function filteredResponse(response, product) {
     return response.clone().json().then((payload) => {
       if (!Array.isArray(payload)) return response;
-
-      const certain = payload
-        .map((offer, index) => ({
-          offer,
-          index,
-          unitPrice: comparableUnitPrice(offer)
-        }))
-        .filter((entry) => classify(product, entry.offer) === "certain")
-        .sort((a, b) => {
-          const aHasUnitPrice = Number.isFinite(a.unitPrice);
-          const bHasUnitPrice = Number.isFinite(b.unitPrice);
-
-          if (aHasUnitPrice && bHasUnitPrice) {
-            return (a.unitPrice - b.unitPrice) || (a.index - b.index);
-          }
-          if (aHasUnitPrice) return -1;
-          if (bHasUnitPrice) return 1;
-          return a.index - b.index;
-        })
-        .map((entry) => entry.offer);
-
-      return new Response(JSON.stringify(certain), {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers
-      });
+      const certain = payload.filter((offer) => classify(product, offer) === "certain");
+      return responseWithOffers(response, sortOffers(certain));
     }).catch(() => response);
   }
 
@@ -149,16 +155,18 @@
     }
 
     const shoppingQuery = url.searchParams.get("query") || "";
-    if (!shoppingQuery) return originalFetch(input, init);
+    if (!shoppingQuery) return sortedResponse(await originalFetch(input, init));
 
-    let product;
+    let product = null;
     try {
       product = productForQuery(await monitoredProducts(), shoppingQuery);
     } catch (_) {
-      return originalFetch(input, init);
+      return sortedResponse(await originalFetch(input, init));
     }
 
-    if (!product) return originalFetch(input, init);
+    if (!product || !hasPositiveRules(product)) {
+      return sortedResponse(await originalFetch(input, init));
+    }
 
     const searchTerm = normalizeName(product.search_term) || shoppingQuery;
     url.searchParams.set("query", searchTerm);

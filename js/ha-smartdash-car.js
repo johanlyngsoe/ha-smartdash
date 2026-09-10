@@ -91,9 +91,9 @@
       <span class="beast-car-v2-section-label">Dæktryk</span>
       <div class="beast-car-v2-tires">${wheels.map((wheel) => {
         const low = highest !== null && Number.isFinite(wheel.pressure) && highest - wheel.pressure >= 2.5;
-        return `<span class="beast-car-v2-tire${low ? " is-low" : "}"><small>${wheel.label}</small><strong>${Number.isFinite(wheel.pressure) ? wheel.pressure.toFixed(1) : "–"}</strong><em>PSI</em></span>`;
+        return `<span class="beast-car-v2-tire${low ? " is-low" : ""}"><small>${wheel.label}</small><strong>${Number.isFinite(wheel.pressure) ? wheel.pressure.toFixed(1) : "–"}</strong><em>PSI</em></span>`;
       }).join("")}</div>
-      <span class="beast-car-v2-health${hasLow ? " is-warning" : "}">${hasLow ? "Kontrollér dæk" : "Dæktryk OK"}</span>
+      <span class="beast-car-v2-health${hasLow ? " is-warning" : ""}">${hasLow ? "Kontrollér dæk" : "Dæktryk OK"}</span>
     </div>`;
   }
 

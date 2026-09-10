@@ -1,0 +1,28 @@
+.beast-price-monitor-table .beast-price-monitor-actions-with-shopping {
+  width:114px;
+  min-width:114px;
+}
+
+.beast-price-monitor-add-shopping.is-added {
+  color:var(--success);
+}
+
+.beast-price-monitor-add-shopping.is-busy {
+  opacity:.55;
+}
+
+.beast-price-monitor-latest-store {
+  display:block;
+  margin-top:3px;
+  color:var(--text-muted);
+  font-size:10px;
+  font-weight:600;
+  line-height:1.2;
+}
+
+@media(max-width:800px) {
+  .beast-price-monitor-table .beast-price-monitor-actions-with-shopping {
+    width:114px;
+    min-width:114px;
+  }
+}

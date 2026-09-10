@@ -87,6 +87,14 @@
 
   window.fetch = async (input, init) => {
     const rawUrl = typeof input === "string" ? input : input?.url;
+
+    if (rawUrl && rawUrl.includes("/api/price-monitor.php")) {
+      const method = String(init?.method || (typeof input !== "string" ? input?.method : "GET") || "GET").toUpperCase();
+      const response = await originalFetch(input, init);
+      if (method !== "GET" && response.ok) productsPromise = null;
+      return response;
+    }
+
     if (!rawUrl || !rawUrl.includes(OFFER_API_FRAGMENT)) {
       return originalFetch(input, init);
     }

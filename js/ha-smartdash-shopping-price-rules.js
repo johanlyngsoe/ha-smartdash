@@ -66,16 +66,17 @@
   }
 
   function comparableUnitPrice(offer) {
+    const q = offer?.quantity || {};
     const price = Number(offer?.pricing?.price);
-    const sizeFrom = Number(offer?.quantity?.size?.from);
-    const sizeTo = Number(offer?.quantity?.size?.to);
-    const piecesFrom = Number(offer?.quantity?.pieces?.from ?? 1);
-    const piecesTo = Number(offer?.quantity?.pieces?.to ?? piecesFrom);
-    const symbol = String(offer?.quantity?.unit?.symbol || "").toLocaleLowerCase("da-DK");
+    const size = Number(q.size?.from);
+    const pieces = Number(q.pieces?.from ?? 1);
+    const symbol = String(q.unit?.symbol || "").toLocaleLowerCase("da-DK");
 
-    if (![price, sizeFrom, sizeTo, piecesFrom, piecesTo].every(Number.isFinite)) return null;
-    if (price <= 0 || sizeFrom <= 0 || piecesFrom <= 0) return null;
-    if (sizeFrom !== sizeTo || piecesFrom !== piecesTo) return null;
+    if (q.size?.to != null && Number(q.size.to) !== size) return null;
+    if (q.pieces?.to != null && Number(q.pieces.to) !== pieces) return null;
+    if (!Number.isFinite(price) || price <= 0) return null;
+    if (!Number.isFinite(size) || size <= 0) return null;
+    if (!Number.isFinite(pieces) || pieces <= 0) return null;
 
     const factors = {
       g: 0.001,
@@ -90,8 +91,8 @@
     const factor = factors[symbol];
     if (!factor) return null;
 
-    const normalizedQuantity = sizeFrom * piecesFrom * factor;
-    if (normalizedQuantity <= 0) return null;
+    const normalizedQuantity = size * pieces * factor;
+    if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) return null;
 
     return price / normalizedQuantity;
   }

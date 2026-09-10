@@ -64,11 +64,60 @@
     return "certain";
   }
 
+  function comparableUnitPrice(offer) {
+    const price = Number(offer?.pricing?.price);
+    const sizeFrom = Number(offer?.quantity?.size?.from);
+    const sizeTo = Number(offer?.quantity?.size?.to);
+    const piecesFrom = Number(offer?.quantity?.pieces?.from ?? 1);
+    const piecesTo = Number(offer?.quantity?.pieces?.to ?? piecesFrom);
+    const symbol = String(offer?.quantity?.unit?.symbol || "").toLocaleLowerCase("da-DK");
+
+    if (![price, sizeFrom, sizeTo, piecesFrom, piecesTo].every(Number.isFinite)) return null;
+    if (price <= 0 || sizeFrom <= 0 || piecesFrom <= 0) return null;
+    if (sizeFrom !== sizeTo || piecesFrom !== piecesTo) return null;
+
+    const factors = {
+      g: 0.001,
+      kg: 1,
+      hg: 0.1,
+      ml: 0.001,
+      cl: 0.01,
+      dl: 0.1,
+      l: 1
+    };
+
+    const factor = factors[symbol];
+    if (!factor) return null;
+
+    const normalizedQuantity = sizeFrom * piecesFrom * factor;
+    if (normalizedQuantity <= 0) return null;
+
+    return price / normalizedQuantity;
+  }
+
   function filteredResponse(response, product) {
     return response.clone().json().then((payload) => {
       if (!Array.isArray(payload)) return response;
 
-      const certain = payload.filter((offer) => classify(product, offer) === "certain");
+      const certain = payload
+        .map((offer, index) => ({
+          offer,
+          index,
+          unitPrice: comparableUnitPrice(offer)
+        }))
+        .filter((entry) => classify(product, entry.offer) === "certain")
+        .sort((a, b) => {
+          const aHasUnitPrice = Number.isFinite(a.unitPrice);
+          const bHasUnitPrice = Number.isFinite(b.unitPrice);
+
+          if (aHasUnitPrice && bHasUnitPrice) {
+            return (a.unitPrice - b.unitPrice) || (a.index - b.index);
+          }
+          if (aHasUnitPrice) return -1;
+          if (bHasUnitPrice) return 1;
+          return a.index - b.index;
+        })
+        .map((entry) => entry.offer);
 
       return new Response(JSON.stringify(certain), {
         status: response.status,

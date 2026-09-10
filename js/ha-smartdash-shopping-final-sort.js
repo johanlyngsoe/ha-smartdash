@@ -11,6 +11,13 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function formatNumber(value) {
+    return Number(value).toLocaleString("da-DK", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
   function displayedUnitPrice(card) {
     if (!card) return null;
 
@@ -20,23 +27,83 @@
 
     if (!unitLine) return null;
 
-    const match = unitLine.match(/([\d.,]+)\s*kr\.\s*\/(kg|liter)\b/i);
+    const match = unitLine.match(/([\d.,]+)(?:\s*[–-]\s*([\d.,]+))?\s*kr\.\s*\/(kg|liter)\b/i);
     if (!match) return null;
 
-    const value = parseNumber(match[1]);
-    if (!Number.isFinite(value)) return null;
+    const first = parseNumber(match[1]);
+    const second = match[2] ? parseNumber(match[2]) : null;
+    const conservative = Number.isFinite(second) ? Math.max(first, second) : first;
+    if (!Number.isFinite(conservative)) return null;
 
     return {
-      value,
-      unit: match[2].toLocaleLowerCase("da-DK")
+      value: conservative,
+      unit: match[3].toLocaleLowerCase("da-DK")
     };
+  }
+
+  function rangeUnitPrice(card) {
+    if (!card || displayedUnitPrice(card)) return null;
+
+    const description = card.querySelector(".beast-shopping-offer-main span")?.textContent || "";
+    const price = parseNumber(card.querySelector(".beast-shopping-offer-price")?.textContent || "");
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    const match = description.match(/([\d.,]+)\s*[–-]\s*([\d.,]+)\s*(kg|g|hg|l|dl|cl|ml)\b/i);
+    if (!match) return null;
+
+    const from = parseNumber(match[1]);
+    const to = parseNumber(match[2]);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from <= 0 || to <= 0) return null;
+
+    const factors = {
+      g: ["kg", 0.001],
+      kg: ["kg", 1],
+      hg: ["kg", 0.1],
+      ml: ["liter", 0.001],
+      cl: ["liter", 0.01],
+      dl: ["liter", 0.1],
+      l: ["liter", 1]
+    };
+    const factor = factors[match[3].toLocaleLowerCase("da-DK")];
+    if (!factor) return null;
+
+    const lowQuantity = Math.min(from, to) * factor[1];
+    const highQuantity = Math.max(from, to) * factor[1];
+    if (lowQuantity <= 0 || highQuantity <= 0) return null;
+
+    const bestCase = price / highQuantity;
+    const conservative = price / lowQuantity;
+    if (!Number.isFinite(bestCase) || !Number.isFinite(conservative)) return null;
+
+    return {
+      min: bestCase,
+      max: conservative,
+      value: conservative,
+      unit: factor[0]
+    };
+  }
+
+  function enhanceRangePrice(card) {
+    if (!card || card.querySelector(".beast-shopping-derived-unit-range")) return;
+    const range = rangeUnitPrice(card);
+    if (!range) return;
+
+    const main = card.querySelector(".beast-shopping-offer-main");
+    if (!main) return;
+
+    const line = document.createElement("em");
+    line.className = "beast-shopping-derived-unit-range";
+    line.textContent = `${formatNumber(range.min)}–${formatNumber(range.max)} kr./${range.unit}`;
+    main.appendChild(line);
   }
 
   function sortContainer(container) {
     if (!container || sorting) return;
 
     const cards = [...container.querySelectorAll(":scope > .beast-shopping-offer")];
-    if (cards.length < 2) return;
+    if (cards.length < 1) return;
+
+    cards.forEach(enhanceRangePrice);
 
     const ranked = cards.map((card, index) => ({
       card,

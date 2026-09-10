@@ -11,6 +11,11 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function parsePrice(value) {
+    const match = String(value || "").match(/[\d.,]+/);
+    return match ? parseNumber(match[0]) : null;
+  }
+
   function formatNumber(value) {
     return Number(value).toLocaleString("da-DK", {
       minimumFractionDigits: 2,
@@ -45,7 +50,7 @@
     if (!card || displayedUnitPrice(card)) return null;
 
     const description = card.querySelector(".beast-shopping-offer-main span")?.textContent || "";
-    const price = parseNumber(card.querySelector(".beast-shopping-offer-price")?.textContent || "");
+    const price = parsePrice(card.querySelector(".beast-shopping-offer-price")?.textContent || "");
     if (!Number.isFinite(price) || price <= 0) return null;
 
     const match = description.match(/([\d.,]+)\s*[–-]\s*([\d.,]+)\s*(kg|g|hg|l|dl|cl|ml)\b/i);

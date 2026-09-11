@@ -1,0 +1,24 @@
+/* RoboGub UAT layout: use the full SmartDash work area and give live status more room. */
+#beastRobotsGrid [data-builder-card]:has(.beast-robogub-console){
+  grid-column:1 / -1!important;
+  width:100%!important;
+  max-width:none!important;
+}
+#beastRobotsGrid [data-builder-card]:has(.beast-robogub-console) .beast-robot-card{
+  width:100%!important;
+  max-width:none!important;
+}
+.beast-robogub-hero{grid-template-columns:minmax(0,1.75fr) minmax(330px,.8fr)!important}
+.beast-robogub-map{height:390px!important}
+.beast-robogub-map-empty{height:390px!important}
+.beast-robogub-lower{grid-template-columns:minmax(280px,.8fr) minmax(0,1.25fr) minmax(280px,.75fr)!important}
+.beast-robogub-current{padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-2);display:grid;align-content:start;gap:10px}
+.beast-robogub-current small{display:block;color:var(--ink-muted);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em}
+.beast-robogub-current strong{display:block;margin-top:2px;font-size:var(--text-lg)}
+.beast-robogub-current-state{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.beast-robogub-current-state span{color:var(--ink-muted);font-size:var(--text-sm)}
+.beast-robogub-progressbar{height:9px;overflow:hidden;border-radius:999px;background:var(--surface-solid);border:1px solid var(--border)}
+.beast-robogub-progressbar>span{display:block;height:100%;width:var(--robogub-progress,0%);background:var(--accent);border-radius:inherit}
+.beast-robogub-action[data-smart-disabled="true"]{opacity:.38;pointer-events:none}
+@media(max-width:1100px){.beast-robogub-lower{grid-template-columns:1fr 1fr!important}.beast-robogub-current{grid-column:1 / -1}.beast-robogub-map{height:340px!important}.beast-robogub-map-empty{height:340px!important}}
+@media(max-width:900px){.beast-robogub-hero,.beast-robogub-lower{grid-template-columns:1fr!important}.beast-robogub-current{grid-column:auto}.beast-robogub-map{height:300px!important}.beast-robogub-map-empty{height:300px!important}}

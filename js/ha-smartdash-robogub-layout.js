@@ -5,6 +5,7 @@
   const PROGRESS = "sensor.robogub_fremdrift";
   const REMAINING = "sensor.robogub_tid_tilbage";
   const MOWER = "lawn_mower.robogub";
+  let applyQueued = false;
 
   function state(id) { return BeastHaSocket.getState(id)?.state || ""; }
   function escapeHtml(value) {
@@ -51,7 +52,10 @@
     const activity = state(ACTIVITY) || state(MOWER) || "Ukendt";
     const location = state(LOCATION) || "Ingen aktiv opgave";
     const progress = Math.max(0, Math.min(100, Number(state(PROGRESS)) || 0));
-    current.innerHTML = `<div><small>Aktuel opgave</small><strong>${escapeHtml(location)}</strong></div><div class="beast-robogub-current-state"><span>${escapeHtml(activity)}</span><span>${progress}% · ${escapeHtml(formatDuration(state(REMAINING)))}</span></div><div class="beast-robogub-progressbar" style="--robogub-progress:${progress}%"><span></span></div>`;
+    const markup = `<div><small>Aktuel opgave</small><strong>${escapeHtml(location)}</strong></div><div class="beast-robogub-current-state"><span>${escapeHtml(activity)}</span><span>${progress}% · ${escapeHtml(formatDuration(state(REMAINING)))}</span></div><div class="beast-robogub-progressbar" style="--robogub-progress:${progress}%"><span></span></div>`;
+    if (current.dataset.renderMarkup === markup) return;
+    current.dataset.renderMarkup = markup;
+    current.innerHTML = markup;
   }
 
   function updateActions(consoleEl) {
@@ -63,6 +67,7 @@
   }
 
   function apply() {
+    applyQueued = false;
     const consoleEl = document.querySelector("#beastRobotsGrid .beast-robogub-console");
     if (!consoleEl) return;
     const card = consoleEl.closest("[data-builder-card]");
@@ -82,6 +87,19 @@
     }
     updateCurrentTask(consoleEl);
     updateActions(consoleEl);
+  }
+
+  function queueApply() {
+    if (applyQueued) return;
+    applyQueued = true;
+    requestAnimationFrame(apply);
+  }
+
+  function mutationAddsRoboGub(mutations) {
+    return mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => {
+      if (!(node instanceof Element)) return false;
+      return node.matches?.(".beast-robogub-console, #beastRobotsGrid") || !!node.querySelector?.(".beast-robogub-console, #beastRobotsGrid");
+    }));
   }
 
   function addStyles() {
@@ -141,10 +159,12 @@
 
   function init() {
     addStyles();
-    apply();
+    queueApply();
     const root = document.getElementById("beastRoot") || document.body;
-    new MutationObserver(() => requestAnimationFrame(apply)).observe(root, { childList: true, subtree: true });
-    [TRACKER, ACTIVITY, LOCATION, PROGRESS, REMAINING, MOWER].forEach((id) => BeastHaSocket.subscribeEntity(id, apply));
+    new MutationObserver((mutations) => {
+      if (mutationAddsRoboGub(mutations)) queueApply();
+    }).observe(root, { childList: true, subtree: true });
+    [TRACKER, ACTIVITY, LOCATION, PROGRESS, REMAINING, MOWER].forEach((id) => BeastHaSocket.subscribeEntity(id, queueApply));
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });

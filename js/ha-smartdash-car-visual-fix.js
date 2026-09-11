@@ -6,8 +6,8 @@
     const style = document.createElement("style");
     style.id = "beastCarVisualFixStyles";
     style.textContent = `
-      .beast-car-v3-visual{height:390px!important;width:min(100%,620px)!important;margin-top:2px!important}
-      .beast-car-v3-model-y-host{top:18px!important;width:520px!important;height:330px!important;background:transparent!important;overflow:visible!important}
+      .beast-car-v3-visual{height:360px!important;width:min(100%,620px)!important;margin-top:0!important}
+      .beast-car-v3-model-y-host{top:8px!important;width:520px!important;height:320px!important;background:transparent!important;overflow:visible!important}
       .beast-car-v3-model-y-image{width:100%!important;height:100%!important;object-fit:contain!important;background:transparent!important;transform:scale(1.12);transform-origin:center center;filter:drop-shadow(0 18px 18px rgba(0,0,0,.24))!important}
 
       .beast-car-v3-tire{
@@ -23,45 +23,38 @@
         grid-template-columns:auto auto!important;
         column-gap:5px!important;
       }
-      .beast-car-v3-tire small{
-        color:var(--ink-muted)!important;
-        font-size:.63rem!important;
-        font-weight:800!important;
-        letter-spacing:.06em!important;
-      }
-      .beast-car-v3-tire strong{
-        color:var(--ink)!important;
-        font-size:1.32rem!important;
-        line-height:1.05!important;
-        font-weight:850!important;
-      }
-      .beast-car-v3-tire span{
-        color:var(--ink-muted)!important;
-        font-size:.64rem!important;
-        font-weight:700!important;
-      }
-      .beast-car-v3-tire.is-low{
-        border-color:color-mix(in srgb,var(--warning) 42%,transparent)!important;
-        background:var(--warning-soft)!important;
-      }
+      .beast-car-v3-tire small{color:var(--ink-muted)!important;font-size:.63rem!important;font-weight:800!important;letter-spacing:.06em!important}
+      .beast-car-v3-tire strong{color:var(--ink)!important;font-size:1.32rem!important;line-height:1.05!important;font-weight:850!important}
+      .beast-car-v3-tire span{color:var(--ink-muted)!important;font-size:.64rem!important;font-weight:700!important}
+      .beast-car-v3-tire.is-low{border-color:color-mix(in srgb,var(--warning) 45%,transparent)!important;background:var(--warning-soft)!important}
       .beast-car-v3-tire.is-low strong{color:var(--warning)!important}
 
-      /* Placement follows the car's perspective in the Tesla 3/4 render:
-         front-left = lower-left, front-right = upper-left,
-         rear-left = lower-right, rear-right = upper-right. */
-      .beast-car-v3-tire-fl{left:18px!important;right:auto!important;top:auto!important;bottom:54px!important}
-      .beast-car-v3-tire-fr{left:18px!important;right:auto!important;top:76px!important;bottom:auto!important}
-      .beast-car-v3-tire-rl{left:auto!important;right:18px!important;top:auto!important;bottom:54px!important}
-      .beast-car-v3-tire-rr{left:auto!important;right:18px!important;top:76px!important;bottom:auto!important}
+      /* Perspective placement:
+         FH = front-right = upper-left
+         FV = front-left = lower-left
+         BH = rear-right = upper-right
+         BV = rear-left = lower-right */
+      .beast-car-v3-tire-fl{left:48px!important;right:auto!important;top:auto!important;bottom:42px!important}
+      .beast-car-v3-tire-fr{left:48px!important;right:auto!important;top:66px!important;bottom:auto!important}
+      .beast-car-v3-tire-rl{left:auto!important;right:48px!important;top:auto!important;bottom:42px!important}
+      .beast-car-v3-tire-rr{left:auto!important;right:48px!important;top:66px!important;bottom:auto!important}
+
+      .beast-car-v3-map-card{padding:18px 20px 20px;overflow:hidden}
+      .beast-car-v3-map-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+      .beast-car-v3-map-location{color:var(--ink-muted);font-size:var(--text-xs);font-weight:700}
+      .beast-car-v3-map-frame{position:relative;width:100%;height:300px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-solid)}
+      .beast-car-v3-map-frame iframe{width:100%;height:100%;border:0;display:block}
+      .beast-car-v3-map-empty{min-height:170px;display:grid;place-items:center;padding:24px;text-align:center;color:var(--ink-muted);font-size:var(--text-sm)}
 
       @media(max-width:700px){
-        .beast-car-v3-visual{height:370px!important}
-        .beast-car-v3-model-y-host{top:14px!important;width:480px!important;height:310px!important}
+        .beast-car-v3-visual{height:345px!important}
+        .beast-car-v3-model-y-host{top:4px!important;width:480px!important;height:300px!important}
         .beast-car-v3-model-y-image{transform:scale(1.08)}
-        .beast-car-v3-tire-fl{left:12px!important;bottom:50px!important}
-        .beast-car-v3-tire-fr{left:12px!important;top:70px!important}
-        .beast-car-v3-tire-rl{right:12px!important;bottom:50px!important}
-        .beast-car-v3-tire-rr{right:12px!important;top:70px!important}
+        .beast-car-v3-tire-fl{left:34px!important;bottom:38px!important}
+        .beast-car-v3-tire-fr{left:34px!important;top:60px!important}
+        .beast-car-v3-tire-rl{right:34px!important;bottom:38px!important}
+        .beast-car-v3-tire-rr{right:34px!important;top:60px!important}
+        .beast-car-v3-map-frame{height:260px}
       }
     `;
     document.head.appendChild(style);
@@ -75,12 +68,73 @@
     return true;
   }
 
+  function mapLabel(tracker) {
+    if (!tracker) return "Ukendt";
+    if (tracker.state === "home") return "Hjemme";
+    if (["not_home", "away"].includes(tracker.state)) return "Ude";
+    return tracker.state || "Ukendt";
+  }
+
+  function mapMarkup() {
+    const config = BeastConfig.get("panels.car") || {};
+    const tracker = config.locationTracker ? BeastHaSocket.getState(config.locationTracker) : null;
+    const latitude = Number(tracker?.attributes?.latitude);
+    const longitude = Number(tracker?.attributes?.longitude);
+    const label = mapLabel(tracker);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1">
+        <div class="beast-car-v3-map-head">
+          <span class="beast-car-v3-section-label">Placering</span>
+          <span class="beast-car-v3-map-location">${label}</span>
+        </div>
+        <div class="beast-car-v3-map-empty">Yrsa har endnu ikke GPS-koordinater på den valgte device tracker.</div>
+      </section>`;
+    }
+
+    const latSpan = 0.018;
+    const lonSpan = 0.028;
+    const bbox = [longitude - lonSpan, latitude - latSpan, longitude + lonSpan, latitude + latSpan]
+      .map((value) => value.toFixed(6)).join("%2C");
+    const marker = `${latitude.toFixed(6)}%2C${longitude.toFixed(6)}`;
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`;
+
+    return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1">
+      <div class="beast-car-v3-map-head">
+        <span class="beast-car-v3-section-label">Placering</span>
+        <span class="beast-car-v3-map-location">${label}</span>
+      </div>
+      <div class="beast-car-v3-map-frame">
+        <iframe title="Yrsa placering" loading="lazy" referrerpolicy="no-referrer" src="${src}"></iframe>
+      </div>
+    </section>`;
+  }
+
+  function applyMap() {
+    const shell = document.querySelector(".beast-car-v3-shell");
+    if (!shell) return false;
+    const current = shell.querySelector('[data-car-map="1"]');
+    if (current) current.remove();
+    const info = shell.querySelector(".beast-car-v3-info");
+    if (!info) return false;
+    info.insertAdjacentHTML("afterend", mapMarkup());
+    return true;
+  }
+
   function apply() {
     injectStyles();
     applyImage();
+    applyMap();
   }
 
-  const observer = new MutationObserver(() => apply());
+  let applying = false;
+  const observer = new MutationObserver(() => {
+    if (applying) return;
+    applying = true;
+    queueMicrotask(() => {
+      try { apply(); } finally { applying = false; }
+    });
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
   else apply();

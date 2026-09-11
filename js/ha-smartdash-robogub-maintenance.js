@@ -149,10 +149,14 @@
     queued = false;
     const consoleEl = document.querySelector("#beastRobotsGrid .beast-robogub-console");
     if (!consoleEl) return;
-    consoleEl.querySelector(".beast-robogub-maintenance")?.remove();
+    const markup = build();
+    const existing = consoleEl.querySelector(".beast-robogub-maintenance");
+    if (existing && existing.dataset.renderMarkup === markup) return;
+    existing?.remove();
     const holder = document.createElement("div");
-    holder.innerHTML = build();
+    holder.innerHTML = markup;
     const section = holder.firstElementChild;
+    section.dataset.renderMarkup = markup;
     consoleEl.appendChild(section);
     wire(section);
   }
@@ -163,11 +167,20 @@
     requestAnimationFrame(enhance);
   }
 
+  function mutationAddsRoboGub(mutations) {
+    return mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => {
+      if (!(node instanceof Element)) return false;
+      return node.matches?.(".beast-robogub-console, #beastRobotsGrid") || !!node.querySelector?.(".beast-robogub-console, #beastRobotsGrid");
+    }));
+  }
+
   function init() {
     addStyles();
     queue();
     const root = document.getElementById("beastRoot") || document.body;
-    new MutationObserver(queue).observe(root, { childList: true, subtree: true });
+    new MutationObserver((mutations) => {
+      if (mutationAddsRoboGub(mutations)) queue();
+    }).observe(root, { childList: true, subtree: true });
     [IDS.bladeRuntime, IDS.bladeWarning, IDS.firmware].forEach((id) => BeastHaSocket.subscribeEntity(id, queue));
   }
 

@@ -205,7 +205,7 @@ window.BeastSchool = (() => {
   function reminderText(dayText) {
     if (!dayText) return "";
     const reminderPattern =
-      /husk|medbring|aflever|return[eé]r|udfyld|cykel|hjelm|håndklæde|skiftetøj|biblioteksbøger|bibliotek/i;
+      /husk|medbring|aflever|return[eé]r|udfyld|cykel|hjelm|håndklæde|skiftetøj|biblioteksbøger|bibliotek|foto|fotograf|fotografering|skoleportræt|portræt/i;
 
     return String(dayText)
       .split(/\n\s*\n/)

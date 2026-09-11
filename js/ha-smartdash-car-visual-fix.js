@@ -9,16 +9,59 @@
       .beast-car-v3-visual{height:390px!important;width:min(100%,620px)!important;margin-top:2px!important}
       .beast-car-v3-model-y-host{top:18px!important;width:520px!important;height:330px!important;background:transparent!important;overflow:visible!important}
       .beast-car-v3-model-y-image{width:100%!important;height:100%!important;object-fit:contain!important;background:transparent!important;transform:scale(1.12);transform-origin:center center;filter:drop-shadow(0 18px 18px rgba(0,0,0,.24))!important}
-      .beast-car-v3-tire-fl{left:18px!important;top:76px!important}
-      .beast-car-v3-tire-fr{right:18px!important;top:76px!important}
-      .beast-car-v3-tire-rl{left:18px!important;bottom:54px!important}
-      .beast-car-v3-tire-rr{right:18px!important;bottom:54px!important}
+
+      .beast-car-v3-tire{
+        min-width:82px!important;
+        min-height:52px!important;
+        padding:7px 10px 8px!important;
+        border:1px solid rgba(110,126,150,.22)!important;
+        border-radius:14px!important;
+        background:rgba(255,255,255,.72)!important;
+        box-shadow:0 8px 22px rgba(35,48,70,.10)!important;
+        backdrop-filter:blur(12px)!important;
+        -webkit-backdrop-filter:blur(12px)!important;
+        grid-template-columns:auto auto!important;
+        column-gap:5px!important;
+      }
+      .beast-car-v3-tire small{
+        color:#68758a!important;
+        font-size:.63rem!important;
+        font-weight:800!important;
+        letter-spacing:.06em!important;
+      }
+      .beast-car-v3-tire strong{
+        color:#142033!important;
+        font-size:1.32rem!important;
+        line-height:1.05!important;
+        font-weight:850!important;
+      }
+      .beast-car-v3-tire span{
+        color:#758196!important;
+        font-size:.64rem!important;
+        font-weight:700!important;
+      }
+      .beast-car-v3-tire.is-low{
+        border-color:rgba(211,151,37,.42)!important;
+        background:rgba(255,247,226,.86)!important;
+      }
+      .beast-car-v3-tire.is-low strong{color:#a66a00!important}
+
+      /* Placement follows the car's perspective in the Tesla 3/4 render:
+         front-left = lower-left, front-right = upper-left,
+         rear-left = lower-right, rear-right = upper-right. */
+      .beast-car-v3-tire-fl{left:18px!important;right:auto!important;top:auto!important;bottom:54px!important}
+      .beast-car-v3-tire-fr{left:18px!important;right:auto!important;top:76px!important;bottom:auto!important}
+      .beast-car-v3-tire-rl{left:auto!important;right:18px!important;top:auto!important;bottom:54px!important}
+      .beast-car-v3-tire-rr{left:auto!important;right:18px!important;top:76px!important;bottom:auto!important}
+
       @media(max-width:700px){
         .beast-car-v3-visual{height:370px!important}
         .beast-car-v3-model-y-host{top:14px!important;width:480px!important;height:310px!important}
         .beast-car-v3-model-y-image{transform:scale(1.08)}
-        .beast-car-v3-tire-fl,.beast-car-v3-tire-fr{top:70px!important}
-        .beast-car-v3-tire-rl,.beast-car-v3-tire-rr{bottom:50px!important}
+        .beast-car-v3-tire-fl{left:12px!important;bottom:50px!important}
+        .beast-car-v3-tire-fr{left:12px!important;top:70px!important}
+        .beast-car-v3-tire-rl{right:12px!important;bottom:50px!important}
+        .beast-car-v3-tire-rr{right:12px!important;top:70px!important}
       }
     `;
     document.head.appendChild(style);

@@ -1154,6 +1154,8 @@ window.BeastSchool = (() => {
       BeastHaSocket.subscribeEntity(child.profile, stableRender);
       BeastHaSocket.subscribeEntity(child.calendar, stableRender);
     });
+
+    render();
   }
 
   BeastCore.registerPanel("school", "beastSchoolZone", init);

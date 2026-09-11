@@ -745,11 +745,11 @@ window.BeastSchool = (() => {
               </label>
               <label>
                 <span>${t("Start", "Start")}</span>
-                <input type="datetime-local" name="start" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.start))}">
+                <input type="datetime-local" name="start" step="300" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.start))}">
               </label>
               <label>
                 <span>${t("Slut", "End")}</span>
-                <input type="datetime-local" name="end" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.end))}">
+                <input type="datetime-local" name="end" step="300" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.end))}">
               </label>
               <label class="is-wide">
                 <span>${t("Sted", "Location")}</span>

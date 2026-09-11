@@ -700,6 +700,36 @@ window.BeastSchool = (() => {
     return local.toISOString().slice(0, 16);
   }
 
+  function localDatePart(value) {
+    return localDateTimeValue(value).slice(0, 10);
+  }
+
+  function localTimePart(value) {
+    return localDateTimeValue(value).slice(11, 16);
+  }
+
+  function fiveMinuteOptions(selectedValue) {
+    const options = [`<option value="">--:--</option>`];
+    for (let minutes = 0; minutes < 24 * 60; minutes += 5) {
+      const value = [
+        String(Math.floor(minutes / 60)).padStart(2, "0"),
+        String(minutes % 60).padStart(2, "0")
+      ].join(":");
+      options.push(`
+        <option value="${value}" ${value === selectedValue ? "selected" : ""}>
+          ${value}
+        </option>
+      `);
+    }
+    return options.join("");
+  }
+
+  function formDateTimeValue(data, prefix) {
+    const date = String(data.get(`${prefix}Date`) || "");
+    const time = String(data.get(`${prefix}Time`) || "");
+    return date && time ? `${date}T${time}` : "";
+  }
+
   function openModal({
     eyebrow = "",
     title = "",
@@ -745,11 +775,21 @@ window.BeastSchool = (() => {
               </label>
               <label>
                 <span>${t("Start", "Start")}</span>
-                <input type="datetime-local" name="start" step="300" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.start))}">
+                <span class="beast-school-datetime-fields">
+                  <input type="date" name="startDate" value="${escapeHtml(localDatePart(actionItem.suggestedEvent?.start))}" required>
+                  <select name="startTime" aria-label="${t("Starttid", "Start time")}" required>
+                    ${fiveMinuteOptions(localTimePart(actionItem.suggestedEvent?.start))}
+                  </select>
+                </span>
               </label>
               <label>
                 <span>${t("Slut", "End")}</span>
-                <input type="datetime-local" name="end" step="300" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.end))}">
+                <span class="beast-school-datetime-fields">
+                  <input type="date" name="endDate" value="${escapeHtml(localDatePart(actionItem.suggestedEvent?.end))}" required>
+                  <select name="endTime" aria-label="${t("Sluttid", "End time")}" required>
+                    ${fiveMinuteOptions(localTimePart(actionItem.suggestedEvent?.end))}
+                  </select>
+                </span>
               </label>
               <label class="is-wide">
                 <span>${t("Sted", "Location")}</span>
@@ -796,8 +836,8 @@ window.BeastSchool = (() => {
     const childKey = String(data.get("child") || "");
     const child = CHILDREN[childKey];
     const title = String(data.get("title") || "").trim();
-    const startValue = String(data.get("start") || "");
-    const endValue = String(data.get("end") || "");
+    const startValue = formDateTimeValue(data, "start");
+    const endValue = formDateTimeValue(data, "end");
 
     if (resolution === "calendar") {
       const start = new Date(startValue);

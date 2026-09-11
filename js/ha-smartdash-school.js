@@ -776,6 +776,31 @@ window.BeastSchool = (() => {
         );
         return;
       }
+
+      const earliestStart = new Date(Date.now() - 60 * 60 * 1000);
+      const latestStart = new Date(Date.now() + 366 * 24 * 60 * 60 * 1000);
+      if (start < earliestStart) {
+        setActionFormState(
+          form,
+          t(
+            "Starttidspunktet må ikke ligge mere end én time tilbage.",
+            "The start time cannot be more than one hour in the past."
+          ),
+          true
+        );
+        return;
+      }
+      if (start > latestStart) {
+        setActionFormState(
+          form,
+          t(
+            "Starttidspunktet må højst ligge 366 dage frem.",
+            "The start time cannot be more than 366 days ahead."
+          ),
+          true
+        );
+        return;
+      }
     }
 
     setActionFormState(form, t("Gemmer…", "Saving…"));

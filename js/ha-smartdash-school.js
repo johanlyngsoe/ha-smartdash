@@ -376,7 +376,7 @@ window.BeastSchool = (() => {
     };
   }
 
-  function daySummaryMarkup(events) {
+  function daySummaryMarkup(events, state) {
     const overview = dayOverview(events);
     const nextSubject = overview.next ? subjectLabel(overview.next.subject) : "–";
 
@@ -404,6 +404,10 @@ window.BeastSchool = (() => {
               : t("Første fag", "First lesson")}</small>
             <strong>${escapeHtml(nextSubject)}</strong>
             ${overview.next ? `<span>${timeLabel(overview.next.start)}–${timeLabel(overview.next.end)}</span>` : ""}
+          </div>
+          <div class="is-status">
+            <small>${t("Aula-status", "Aula status")}</small>
+            <strong>${escapeHtml(state || t("Ingen status", "No status"))}</strong>
           </div>
         </div>
       </section>
@@ -719,7 +723,6 @@ window.BeastSchool = (() => {
     const requestId = ++renderRequest;
     const child = CHILDREN[selectedChild];
     const profile = BeastHaSocket.getState(child.profile);
-    const image = profile?.attributes?.profilePicture || "";
     const state = profile?.state || "";
     const weekPlans = parseWeekPlans(profile);
     const weekPlan = displayedWeekDays()
@@ -780,55 +783,41 @@ window.BeastSchool = (() => {
           </div>
         </header>
 
-        ${daySummaryMarkup(events)}
+        ${daySummaryMarkup(events, state)}
 
-        <div class="beast-school-layout">
-          <section class="beast-school-schedule-card">
-            <div class="beast-school-section-head">
-              <div>
-                <small>${escapeHtml(child.name)}</small>
-                <h2>${t("Skoleskema", "Timetable")}</h2>
-              </div>
-              <div class="beast-school-week-nav">
-                <button type="button" data-school-prev aria-label="${t("Forrige uge", "Previous week")}">
-                  ${BeastCore.icon("chevron-right", { size: 18 })}
-                </button>
-                <strong>${escapeHtml(weekLabel())}</strong>
-                <button type="button" data-school-next aria-label="${t("Næste uge", "Next week")}">
-                  ${BeastCore.icon("chevron-right", { size: 18 })}
-                </button>
-              </div>
+        <section class="beast-school-aula-card beast-school-aula-wide">
+          <div class="beast-school-section-head">
+            <div>
+              <small>Aula</small>
+              <h2>${t("Det skal I vide", "What you need to know")}</h2>
             </div>
-            ${reminderMarkup(currentWeekPlans)}
-            ${scheduleMarkup(events, currentWeekPlans)}
-          </section>
+            <span class="beast-school-live-dot"></span>
+          </div>
+          <div class="beast-school-notices">
+            ${attentionMarkup()}
+          </div>
+          ${weekPlanMarkup()}
+        </section>
 
-          <aside class="beast-school-sidebar">
-            <section class="beast-school-aula-card">
-              <div class="beast-school-section-head">
-                <div>
-                  <small>Aula</small>
-                  <h2>${t("Det skal I vide", "What you need to know")}</h2>
-                </div>
-                <span class="beast-school-live-dot"></span>
-              </div>
-              <div class="beast-school-notices">
-                ${attentionMarkup()}
-              </div>
-              ${weekPlanMarkup()}
-            </section>
-
-            <section class="beast-school-status-card">
-              ${image
-                ? `<img src="${escapeHtml(image)}" alt="">`
-                : `<span>${escapeHtml(child.name.slice(0, 1))}</span>`}
-              <div>
-                <small>${t("Aula-status", "Aula status")}</small>
-                <strong>${escapeHtml(state || t("Ingen status", "No status"))}</strong>
-              </div>
-            </section>
-          </aside>
-        </div>
+        <section class="beast-school-schedule-card">
+          <div class="beast-school-section-head">
+            <div>
+              <small>${escapeHtml(child.name)}</small>
+              <h2>${t("Skoleskema", "Timetable")}</h2>
+            </div>
+            <div class="beast-school-week-nav">
+              <button type="button" data-school-prev aria-label="${t("Forrige uge", "Previous week")}">
+                ${BeastCore.icon("chevron-right", { size: 18 })}
+              </button>
+              <strong>${escapeHtml(weekLabel())}</strong>
+              <button type="button" data-school-next aria-label="${t("Næste uge", "Next week")}">
+                ${BeastCore.icon("chevron-right", { size: 18 })}
+              </button>
+            </div>
+          </div>
+          ${reminderMarkup(currentWeekPlans)}
+          ${scheduleMarkup(events, currentWeekPlans)}
+        </section>
       </div>
     `;
 

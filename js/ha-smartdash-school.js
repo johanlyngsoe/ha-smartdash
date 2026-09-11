@@ -2,17 +2,21 @@ window.BeastSchool = (() => {
   const CHILDREN = {
     frederikke: {
       name: "Frederikke",
+      fullName: "Frederikke Korsgaard Lyngsø",
       calendar: "calendar.skoleskema_frederikke_korsgaard_lyngso",
       profile: "sensor.dybkaerskolen_frederikke"
     },
     mikkeline: {
       name: "Mikkeline",
+      fullName: "Mikkeline Korsgaard Lyngsø",
       calendar: "calendar.skoleskema_mikkeline_korsgaard_lyngso",
       profile: "sensor.dybkaerskolen_mikkeline"
     }
   };
 
   const ATTENTION_ENTITY = "sensor.aula_attention";
+  const ACTION_REGISTRY_ENTITY = "sensor.aula_action_registry";
+  const ACTION_SCRIPT = "script.aula_attention_handle";
   const SUBJECT_COLORS = [
     "#3578c7", "#a8556e", "#31856b", "#9b7131",
     "#7656ad", "#308491", "#ae5f35", "#587d46"
@@ -25,6 +29,7 @@ window.BeastSchool = (() => {
   let currentAttentionItems = [];
   let currentWeekPlan = "";
   let currentWeekPlans = new Map();
+  const locallyHandledActions = new Set();
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -250,6 +255,63 @@ window.BeastSchool = (() => {
     return badges;
   }
 
+  function arrayAttribute(entityId, attribute) {
+    const value = BeastHaSocket.getState(entityId)?.attributes?.[attribute];
+    if (Array.isArray(value)) return value;
+    if (typeof value !== "string") return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function handledActionFingerprints() {
+    return new Set([
+      ...arrayAttribute(ACTION_REGISTRY_ENTITY, "handled")
+        .map((item) => item?.fingerprint)
+        .filter(Boolean),
+      ...locallyHandledActions
+    ]);
+  }
+
+  function childKeys(names) {
+    const normalized = Array.isArray(names) ? names : [];
+    return Object.entries(CHILDREN)
+      .filter(([, child]) => normalized.includes(child.fullName))
+      .map(([key]) => key);
+  }
+
+  function manualAttentionItems() {
+    const handled = handledActionFingerprints();
+    return arrayAttribute(ATTENTION_ENTITY, "manual_actions").flatMap((item) => {
+      const fingerprint = String(item?.fingerprint || "");
+      if (!/^[0-9a-f]{24}$/.test(fingerprint) || handled.has(fingerprint)) return [];
+
+      const children = childKeys(item.appliesToChildren);
+      const actionType = String(item.actionType || "other");
+      const badge = {
+        payment: t("Betaling", "Payment"),
+        response: t("Svar", "Response")
+      }[actionType] || t("Handling", "Action");
+
+      return [{
+        section: t("Beskeder", "Messages"),
+        child: children.length === 1 ? children[0] : null,
+        children,
+        title: String(item.title || t("Aula-besked", "Aula message")),
+        detail: String(item.detail || ""),
+        badges: [badge],
+        manualAction: true,
+        fingerprint,
+        suggestedEvent: item.suggestedEvent && typeof item.suggestedEvent === "object"
+          ? item.suggestedEvent
+          : {}
+      }];
+    });
+  }
+
   function parseAttention() {
     const content = BeastHaSocket.getState(ATTENTION_ENTITY)?.attributes?.content || "";
     const lines = String(content).split(/\r?\n/);
@@ -296,7 +358,7 @@ window.BeastSchool = (() => {
     });
 
     push();
-    return items;
+    return [...items, ...manualAttentionItems()];
   }
 
   async function loadWeek(calendarEntity) {
@@ -602,7 +664,15 @@ window.BeastSchool = (() => {
     `;
   }
 
-  function openModal({ eyebrow = "", title = "", body = "", meta = "" }) {
+  function localDateTimeValue(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  function openModal({ eyebrow = "", title = "", body = "", meta = "", actionItem = null }) {
     document.getElementById("beastSchoolModal")?.remove();
 
     const overlay = document.createElement("div");
@@ -622,6 +692,45 @@ window.BeastSchool = (() => {
         </div>
         <div class="beast-modal-body">
           <div class="beast-school-modal-text">${escapeHtml(body)}</div>
+          ${actionItem ? `
+            <form class="beast-school-action-form" data-aula-action-form>
+              <label>
+                <span>${t("Barn", "Child")}</span>
+                <select name="child" required>
+                  ${Object.entries(CHILDREN).map(([key, child]) => `
+                    <option value="${key}" ${key === selectedChild ? "selected" : ""}>
+                      ${escapeHtml(child.name)}
+                    </option>
+                  `).join("")}
+                </select>
+              </label>
+              <label class="is-wide">
+                <span>${t("Titel", "Title")}</span>
+                <input name="title" maxlength="120" value="${escapeHtml(actionItem.suggestedEvent?.title || actionItem.title)}" required>
+              </label>
+              <label>
+                <span>${t("Start", "Start")}</span>
+                <input type="datetime-local" name="start" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.start))}">
+              </label>
+              <label>
+                <span>${t("Slut", "End")}</span>
+                <input type="datetime-local" name="end" value="${escapeHtml(localDateTimeValue(actionItem.suggestedEvent?.end))}">
+              </label>
+              <label class="is-wide">
+                <span>${t("Sted", "Location")}</span>
+                <input name="location" maxlength="160" value="${escapeHtml(actionItem.suggestedEvent?.location || "")}">
+              </label>
+              <p class="beast-school-action-status" data-action-status></p>
+              <div class="beast-school-action-buttons is-wide">
+                <button type="button" class="is-secondary" data-mark-complete>
+                  ${t("Markér som klaret", "Mark complete")}
+                </button>
+                <button type="submit" class="is-primary">
+                  ${t("Opret i kalender", "Create calendar event")}
+                </button>
+              </div>
+            </form>
+          ` : ""}
         </div>
       </div>
     `;
@@ -631,6 +740,77 @@ window.BeastSchool = (() => {
     });
 
     document.body.appendChild(overlay);
+
+    if (actionItem) wireActionForm(overlay, actionItem);
+  }
+
+  function setActionFormState(form, message, isError = false) {
+    const status = form.querySelector("[data-action-status]");
+    if (status) {
+      status.textContent = message;
+      status.classList.toggle("is-error", isError);
+    }
+    form.querySelectorAll("button, input, select").forEach((control) => {
+      control.disabled = Boolean(message) && !isError;
+    });
+  }
+
+  async function submitManualAction(form, item, resolution) {
+    const data = new FormData(form);
+    const childKey = String(data.get("child") || "");
+    const child = CHILDREN[childKey];
+    const title = String(data.get("title") || "").trim();
+    const startValue = String(data.get("start") || "");
+    const endValue = String(data.get("end") || "");
+
+    if (resolution === "calendar") {
+      const start = new Date(startValue);
+      const end = new Date(endValue);
+      if (!child || !title || !startValue || !endValue || Number.isNaN(start.getTime()) ||
+          Number.isNaN(end.getTime()) || end <= start) {
+        setActionFormState(
+          form,
+          t("Vælg barn, titel og et gyldigt start-/sluttidspunkt.", "Choose a child, title, and valid start/end time."),
+          true
+        );
+        return;
+      }
+    }
+
+    setActionFormState(form, t("Gemmer…", "Saving…"));
+    try {
+      await BeastAuth.haFetch(`/api/services/${ACTION_SCRIPT.replace(".", "/")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fingerprint: item.fingerprint,
+          resolution,
+          child: child?.fullName || "",
+          title,
+          start: startValue ? new Date(startValue).toISOString() : "",
+          end: endValue ? new Date(endValue).toISOString() : "",
+          location: String(data.get("location") || "").trim(),
+          description: item.detail
+        })
+      });
+      locallyHandledActions.add(item.fingerprint);
+      form.closest(".beast-modal-overlay")?.remove();
+      render();
+    } catch (error) {
+      setActionFormState(form, `${t("Kunne ikke gemme", "Could not save")}: ${error.message}`, true);
+    }
+  }
+
+  function wireActionForm(overlay, item) {
+    const form = overlay.querySelector("[data-aula-action-form]");
+    if (!form) return;
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitManualAction(form, item, "calendar");
+    });
+    form.querySelector("[data-mark-complete]")?.addEventListener("click", () => {
+      submitManualAction(form, item, "completed");
+    });
   }
 
   function wireInteractions(events) {
@@ -677,7 +857,8 @@ window.BeastSchool = (() => {
         openModal({
           eyebrow: `${CHILDREN[selectedChild].name} · ${item.section}`,
           title: item.title,
-          body: item.detail
+          body: item.detail,
+          actionItem: item.manualAction ? item : null
         });
       });
     });
@@ -842,6 +1023,7 @@ window.BeastSchool = (() => {
     });
 
     BeastHaSocket.subscribeEntity(ATTENTION_ENTITY, stableRender);
+    BeastHaSocket.subscribeEntity(ACTION_REGISTRY_ENTITY, stableRender);
     Object.values(CHILDREN).forEach((child) => {
       BeastHaSocket.subscribeEntity(child.profile, stableRender);
       BeastHaSocket.subscribeEntity(child.calendar, stableRender);

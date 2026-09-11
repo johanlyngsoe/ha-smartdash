@@ -2,6 +2,7 @@
   let IDS = {};
   let VEHICLE_LABEL = "Elbil";
   let containerEl = null;
+  const MODEL_Y_ASSET_URL = "https://raw.githubusercontent.com/Aephir/ha-tesla-lovelace-floorplan/main/tesla_floorplan.svg";
 
   function applyConfig() {
     const config = BeastConfig.get("panels.car") || {};
@@ -124,32 +125,37 @@
         ${tireMarkup("fr", "FH", wheels.fr, highest)}
         ${tireMarkup("rl", "BV", wheels.rl, highest)}
         ${tireMarkup("rr", "BH", wheels.rr, highest)}
-        <svg class="beast-car-v3-car" viewBox="0 0 260 520" role="img" aria-label="Sort Tesla Model Y set ovenfra">
-          <defs>
-            <linearGradient id="carBodyV3" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#3d4249"/><stop offset=".25" stop-color="#171a1f"/>
-              <stop offset=".68" stop-color="#050607"/><stop offset="1" stop-color="#262b31"/>
-            </linearGradient>
-            <linearGradient id="carGlassV3" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#3c5366" stop-opacity=".9"/><stop offset="1" stop-color="#111a22" stop-opacity=".96"/>
-            </linearGradient>
-            <filter id="carShadowV3" x="-40%" y="-20%" width="180%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="11" flood-opacity=".42"/></filter>
-          </defs>
-          <ellipse cx="130" cy="489" rx="94" ry="17" fill="#000" opacity=".3"/>
-          <g filter="url(#carShadowV3)">
-            <path d="M130 18 C92 18 68 40 54 82 L36 169 C28 211 27 307 36 350 L51 431 C59 470 83 495 130 501 C177 495 201 470 209 431 L224 350 C233 307 232 211 224 169 L206 82 C192 40 168 18 130 18Z" fill="url(#carBodyV3)" stroke="#59616a" stroke-width="2"/>
-            <path d="M78 99 C91 64 107 51 130 51 C153 51 169 64 182 99 L195 174 L65 174Z" fill="url(#carGlassV3)" stroke="#586875" stroke-width="1.4"/>
-            <path d="M64 190 L196 190 L187 334 L73 334Z" fill="url(#carGlassV3)" stroke="#46545f" stroke-width="1.4"/>
-            <path d="M74 351 L186 351 L175 423 C168 454 153 469 130 472 C107 469 92 454 85 423Z" fill="#0d1116" stroke="#3e464e" stroke-width="1.5"/>
-            <path d="M130 190 V334" stroke="#71808b" stroke-opacity=".22"/>
-            <rect x="27" y="126" width="13" height="74" rx="6" fill="#07090b"/><rect x="220" y="126" width="13" height="74" rx="6" fill="#07090b"/>
-            <rect x="27" y="337" width="13" height="74" rx="6" fill="#07090b"/><rect x="220" y="337" width="13" height="74" rx="6" fill="#07090b"/>
-            <path d="M93 34 C108 29 119 27 130 27 C141 27 152 29 167 34" fill="none" stroke="#e4edf4" stroke-opacity=".45" stroke-width="3" stroke-linecap="round"/>
-            <path d="M91 476 C106 483 118 486 130 486 C142 486 154 483 169 476" fill="none" stroke="#d85959" stroke-opacity=".55" stroke-width="4" stroke-linecap="round"/>
-          </g>
-        </svg>
+        <div class="beast-car-v3-model-y-host" id="beastCarModelY" role="img" aria-label="Sort Tesla Model Y 2021 set ovenfra">
+          <span class="beast-car-v3-model-y-loading">Henter Model Y…</span>
+        </div>
       </div>
     </section>`;
+  }
+
+  async function renderModelYAsset() {
+    const host = containerEl?.querySelector("#beastCarModelY");
+    if (!host) return;
+    try {
+      const response = await fetch(MODEL_Y_ASSET_URL, { cache: "force-cache" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const source = await response.text();
+      const doc = new DOMParser().parseFromString(source, "image/svg+xml");
+      if (doc.querySelector("parsererror")) throw new Error("Ugyldig SVG");
+      const sourceSvg = doc.documentElement;
+      const carLayer = doc.querySelector("#layer2");
+      if (!carLayer) throw new Error("Car layer #layer2 mangler");
+
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "beast-car-v3-model-y");
+      svg.setAttribute("viewBox", sourceSvg.getAttribute("viewBox") || "0 0 286 278.56");
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      svg.setAttribute("aria-hidden", "true");
+      svg.appendChild(document.importNode(carLayer, true));
+      host.replaceChildren(svg);
+    } catch (error) {
+      host.innerHTML = `<span class="beast-car-v3-model-y-error">Model Y-grafik kunne ikke hentes</span>`;
+      BeastCore.log(`Bil: Model Y-grafik fejlede (${error.message}).`);
+    }
   }
 
   function injectStyles() {
@@ -178,13 +184,16 @@
       .beast-car-v3-charge strong{color:var(--ink)}
       .beast-car-v3-visual-card{padding:18px 20px 14px;background:radial-gradient(circle at 50% 46%,rgba(80,115,145,.12),transparent 42%),var(--surface-2)}
       .beast-car-v3-section-label{display:block;color:var(--ink-muted);font-size:var(--text-xs);font-weight:800;text-transform:uppercase;letter-spacing:.1em}
-      .beast-car-v3-visual{position:relative;width:min(100%,470px);height:520px;margin:2px auto 0}
-      .beast-car-v3-car{position:absolute;left:50%;top:6px;width:238px;height:476px;transform:translateX(-50%);overflow:visible}
+      .beast-car-v3-visual{position:relative;width:min(100%,520px);height:500px;margin:2px auto 0}
+      .beast-car-v3-model-y-host{position:absolute;left:50%;top:18px;width:330px;height:455px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;overflow:visible}
+      .beast-car-v3-model-y{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 16px 16px rgba(0,0,0,.34))}
+      .beast-car-v3-model-y-loading,.beast-car-v3-model-y-error{color:var(--ink-muted);font-size:var(--text-xs);text-align:center}
+      .beast-car-v3-model-y-error{max-width:180px;color:var(--warning)}
       .beast-car-v3-tire{position:absolute;z-index:2;display:grid;grid-template-columns:auto auto;column-gap:6px;align-items:baseline;min-width:78px;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(11,14,18,.88);backdrop-filter:blur(5px)}
       .beast-car-v3-tire small{grid-column:1/-1;color:var(--ink-muted);font-size:.65rem;font-weight:800}
       .beast-car-v3-tire strong{font-size:1.25rem}.beast-car-v3-tire span{color:var(--ink-muted);font-size:.68rem}
       .beast-car-v3-tire.is-low{border-color:rgba(255,200,87,.45)}.beast-car-v3-tire.is-low strong{color:var(--warning)}
-      .beast-car-v3-tire-fl{left:5px;top:92px}.beast-car-v3-tire-fr{right:5px;top:92px}.beast-car-v3-tire-rl{left:5px;bottom:76px}.beast-car-v3-tire-rr{right:5px;bottom:76px}
+      .beast-car-v3-tire-fl{left:0;top:100px}.beast-car-v3-tire-fr{right:0;top:100px}.beast-car-v3-tire-rl{left:0;bottom:88px}.beast-car-v3-tire-rr{right:0;bottom:88px}
       .beast-car-v3-info{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
       .beast-car-v3-status-card,.beast-car-v3-climate-card{padding:18px 20px}
       .beast-car-v3-state-list{display:grid;gap:3px;margin-top:12px}
@@ -194,7 +203,7 @@
       .beast-car-v3-climate{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
       .beast-car-v3-temp{padding:14px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-solid)}
       .beast-car-v3-temp small{display:block;color:var(--ink-muted);font-size:var(--text-xs)}.beast-car-v3-temp strong{display:block;margin-top:4px;font-size:2.2rem}
-      @media(max-width:700px){.beast-car-v3-shell{width:100%}.beast-car-v3-info{grid-template-columns:1fr}.beast-car-v3-visual{height:490px}.beast-car-v3-car{width:220px;height:440px}.beast-car-v3-tire-fl,.beast-car-v3-tire-fr{top:86px}.beast-car-v3-tire-rl,.beast-car-v3-tire-rr{bottom:70px}}
+      @media(max-width:700px){.beast-car-v3-shell{width:100%}.beast-car-v3-info{grid-template-columns:1fr}.beast-car-v3-visual{height:470px}.beast-car-v3-model-y-host{width:300px;height:420px;top:10px}.beast-car-v3-tire-fl,.beast-car-v3-tire-fr{top:88px}.beast-car-v3-tire-rl,.beast-car-v3-tire-rr{bottom:80px}}
     `;
     document.head.appendChild(style);
   }
@@ -244,6 +253,7 @@
         </div>
       </div>`;
 
+    renderModelYAsset();
     wireCarLayout();
     document.getElementById("beastCarLockBtn")?.addEventListener("click", () => {
       callService("lock", locked ? "unlock" : "lock", IDS.lock).then(() => window.setTimeout(render, 400));

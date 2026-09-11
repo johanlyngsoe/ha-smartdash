@@ -15,6 +15,7 @@ window.BeastSchool = (() => {
   };
 
   const ATTENTION_ENTITY = "sensor.aula_attention";
+  const MANUAL_ACTIONS_ENTITY = "sensor.aula_manual_actions";
   const ACTION_REGISTRY_ENTITY = "sensor.aula_action_registry";
   const ACTION_SCRIPT = "script.aula_attention_handle";
   const SUBJECT_COLORS = [
@@ -285,7 +286,7 @@ window.BeastSchool = (() => {
 
   function manualAttentionItems() {
     const handled = handledActionFingerprints();
-    return arrayAttribute(ATTENTION_ENTITY, "manual_actions").flatMap((item) => {
+    return arrayAttribute(MANUAL_ACTIONS_ENTITY, "items").flatMap((item) => {
       const fingerprint = String(item?.fingerprint || "");
       if (!/^[0-9a-f]{24}$/.test(fingerprint) || handled.has(fingerprint)) return [];
 
@@ -1023,6 +1024,7 @@ window.BeastSchool = (() => {
     });
 
     BeastHaSocket.subscribeEntity(ATTENTION_ENTITY, stableRender);
+    BeastHaSocket.subscribeEntity(MANUAL_ACTIONS_ENTITY, stableRender);
     BeastHaSocket.subscribeEntity(ACTION_REGISTRY_ENTITY, stableRender);
     Object.values(CHILDREN).forEach((child) => {
       BeastHaSocket.subscribeEntity(child.profile, stableRender);

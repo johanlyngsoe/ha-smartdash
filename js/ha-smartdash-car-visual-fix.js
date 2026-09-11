@@ -75,15 +75,23 @@
     return tracker.state || "Ukendt";
   }
 
-  function mapMarkup() {
+  function getMapState() {
     const config = BeastConfig.get("panels.car") || {};
     const tracker = config.locationTracker ? BeastHaSocket.getState(config.locationTracker) : null;
     const latitude = Number(tracker?.attributes?.latitude);
     const longitude = Number(tracker?.attributes?.longitude);
     const label = mapLabel(tracker);
+    const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+    const key = hasCoordinates
+      ? `${latitude.toFixed(6)}:${longitude.toFixed(6)}:${label}`
+      : `no-coordinates:${label}`;
+    return { latitude, longitude, label, hasCoordinates, key };
+  }
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1">
+  function mapMarkup(state) {
+    const { latitude, longitude, label, hasCoordinates, key } = state;
+    if (!hasCoordinates) {
+      return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1" data-car-map-key="${key}">
         <div class="beast-car-v3-map-head">
           <span class="beast-car-v3-section-label">Placering</span>
           <span class="beast-car-v3-map-location">${label}</span>
@@ -99,7 +107,7 @@
     const marker = `${latitude.toFixed(6)}%2C${longitude.toFixed(6)}`;
     const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`;
 
-    return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1">
+    return `<section class="beast-car-v3-card beast-car-v3-map-card" data-car-map="1" data-car-map-key="${key}">
       <div class="beast-car-v3-map-head">
         <span class="beast-car-v3-section-label">Placering</span>
         <span class="beast-car-v3-map-location">${label}</span>
@@ -113,11 +121,16 @@
   function applyMap() {
     const shell = document.querySelector(".beast-car-v3-shell");
     if (!shell) return false;
-    const current = shell.querySelector('[data-car-map="1"]');
-    if (current) current.remove();
     const info = shell.querySelector(".beast-car-v3-info");
     if (!info) return false;
-    info.insertAdjacentHTML("afterend", mapMarkup());
+
+    const mapState = getMapState();
+    const current = shell.querySelector('[data-car-map="1"]');
+    if (current?.dataset?.carMapKey === mapState.key) return true;
+
+    const markup = mapMarkup(mapState);
+    if (current) current.outerHTML = markup;
+    else info.insertAdjacentHTML("afterend", markup);
     return true;
   }
 

@@ -2,7 +2,8 @@
   let IDS = {};
   let VEHICLE_LABEL = "Elbil";
   let containerEl = null;
-  const MODEL_Y_ASSET_URL = "https://raw.githubusercontent.com/Aephir/ha-tesla-lovelace-floorplan/main/tesla_floorplan.svg";
+
+  const MODEL_Y_IMAGE_URL = "https://static-assets.tesla.com/configurator/compositor?&options=$MTY07,$PPSB,$WY19B,$INPB0&view=FRONT34&model=my&size=1920&bkba_opt=2&version=v0028d202109300916&crop=0,0,0,0";
 
   function applyConfig() {
     const config = BeastConfig.get("panels.car") || {};
@@ -125,37 +126,11 @@
         ${tireMarkup("fr", "FH", wheels.fr, highest)}
         ${tireMarkup("rl", "BV", wheels.rl, highest)}
         ${tireMarkup("rr", "BH", wheels.rr, highest)}
-        <div class="beast-car-v3-model-y-host" id="beastCarModelY" role="img" aria-label="Sort Tesla Model Y 2021 set ovenfra">
-          <span class="beast-car-v3-model-y-loading">Henter Model Y…</span>
+        <div class="beast-car-v3-model-y-host">
+          <img class="beast-car-v3-model-y-image" src="${MODEL_Y_IMAGE_URL}" alt="Sort Tesla Model Y 2021" referrerpolicy="no-referrer">
         </div>
       </div>
     </section>`;
-  }
-
-  async function renderModelYAsset() {
-    const host = containerEl?.querySelector("#beastCarModelY");
-    if (!host) return;
-    try {
-      const response = await fetch(MODEL_Y_ASSET_URL, { cache: "force-cache" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const source = await response.text();
-      const doc = new DOMParser().parseFromString(source, "image/svg+xml");
-      if (doc.querySelector("parsererror")) throw new Error("Ugyldig SVG");
-      const sourceSvg = doc.documentElement;
-      const carLayer = doc.querySelector("#layer2");
-      if (!carLayer) throw new Error("Car layer #layer2 mangler");
-
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("class", "beast-car-v3-model-y");
-      svg.setAttribute("viewBox", sourceSvg.getAttribute("viewBox") || "0 0 286 278.56");
-      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      svg.setAttribute("aria-hidden", "true");
-      svg.appendChild(document.importNode(carLayer, true));
-      host.replaceChildren(svg);
-    } catch (error) {
-      host.innerHTML = `<span class="beast-car-v3-model-y-error">Model Y-grafik kunne ikke hentes</span>`;
-      BeastCore.log(`Bil: Model Y-grafik fejlede (${error.message}).`);
-    }
   }
 
   function injectStyles() {
@@ -184,16 +159,14 @@
       .beast-car-v3-charge strong{color:var(--ink)}
       .beast-car-v3-visual-card{padding:18px 20px 14px;background:radial-gradient(circle at 50% 46%,rgba(80,115,145,.12),transparent 42%),var(--surface-2)}
       .beast-car-v3-section-label{display:block;color:var(--ink-muted);font-size:var(--text-xs);font-weight:800;text-transform:uppercase;letter-spacing:.1em}
-      .beast-car-v3-visual{position:relative;width:min(100%,520px);height:500px;margin:2px auto 0}
-      .beast-car-v3-model-y-host{position:absolute;left:50%;top:18px;width:330px;height:455px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;overflow:visible}
-      .beast-car-v3-model-y{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 16px 16px rgba(0,0,0,.34))}
-      .beast-car-v3-model-y-loading,.beast-car-v3-model-y-error{color:var(--ink-muted);font-size:var(--text-xs);text-align:center}
-      .beast-car-v3-model-y-error{max-width:180px;color:var(--warning)}
+      .beast-car-v3-visual{position:relative;width:min(100%,560px);height:430px;margin:8px auto 0}
+      .beast-car-v3-model-y-host{position:absolute;left:50%;top:32px;width:430px;height:330px;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;overflow:visible}
+      .beast-car-v3-model-y-image{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 18px 18px rgba(0,0,0,.28));user-select:none;-webkit-user-drag:none}
       .beast-car-v3-tire{position:absolute;z-index:2;display:grid;grid-template-columns:auto auto;column-gap:6px;align-items:baseline;min-width:78px;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:rgba(11,14,18,.88);backdrop-filter:blur(5px)}
       .beast-car-v3-tire small{grid-column:1/-1;color:var(--ink-muted);font-size:.65rem;font-weight:800}
       .beast-car-v3-tire strong{font-size:1.25rem}.beast-car-v3-tire span{color:var(--ink-muted);font-size:.68rem}
       .beast-car-v3-tire.is-low{border-color:rgba(255,200,87,.45)}.beast-car-v3-tire.is-low strong{color:var(--warning)}
-      .beast-car-v3-tire-fl{left:0;top:100px}.beast-car-v3-tire-fr{right:0;top:100px}.beast-car-v3-tire-rl{left:0;bottom:88px}.beast-car-v3-tire-rr{right:0;bottom:88px}
+      .beast-car-v3-tire-fl{left:0;top:72px}.beast-car-v3-tire-fr{right:0;top:72px}.beast-car-v3-tire-rl{left:0;bottom:64px}.beast-car-v3-tire-rr{right:0;bottom:64px}
       .beast-car-v3-info{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
       .beast-car-v3-status-card,.beast-car-v3-climate-card{padding:18px 20px}
       .beast-car-v3-state-list{display:grid;gap:3px;margin-top:12px}
@@ -203,7 +176,7 @@
       .beast-car-v3-climate{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
       .beast-car-v3-temp{padding:14px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-solid)}
       .beast-car-v3-temp small{display:block;color:var(--ink-muted);font-size:var(--text-xs)}.beast-car-v3-temp strong{display:block;margin-top:4px;font-size:2.2rem}
-      @media(max-width:700px){.beast-car-v3-shell{width:100%}.beast-car-v3-info{grid-template-columns:1fr}.beast-car-v3-visual{height:470px}.beast-car-v3-model-y-host{width:300px;height:420px;top:10px}.beast-car-v3-tire-fl,.beast-car-v3-tire-fr{top:88px}.beast-car-v3-tire-rl,.beast-car-v3-tire-rr{bottom:80px}}
+      @media(max-width:700px){.beast-car-v3-shell{width:100%}.beast-car-v3-info{grid-template-columns:1fr}.beast-car-v3-visual{height:410px}.beast-car-v3-model-y-host{width:390px;height:300px;top:28px}.beast-car-v3-tire-fl,.beast-car-v3-tire-fr{top:66px}.beast-car-v3-tire-rl,.beast-car-v3-tire-rr{bottom:60px}}
     `;
     document.head.appendChild(style);
   }
@@ -253,7 +226,6 @@
         </div>
       </div>`;
 
-    renderModelYAsset();
     wireCarLayout();
     document.getElementById("beastCarLockBtn")?.addEventListener("click", () => {
       callService("lock", locked ? "unlock" : "lock", IDS.lock).then(() => window.setTimeout(render, 400));

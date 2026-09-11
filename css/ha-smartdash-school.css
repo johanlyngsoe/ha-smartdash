@@ -651,6 +651,17 @@
   font: inherit;
 }
 
+.beast-school-datetime-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+}
+
+.beast-school-datetime-fields input,
+.beast-school-datetime-fields select {
+  min-width: 0;
+}
+
 .beast-school-action-form .is-wide {
   grid-column: 1 / -1;
 }

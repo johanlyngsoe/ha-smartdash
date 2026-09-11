@@ -18,6 +18,7 @@ window.BeastSchool = (() => {
   const MANUAL_ACTIONS_ENTITY = "sensor.aula_manual_actions";
   const ACTION_REGISTRY_ENTITY = "sensor.aula_action_registry";
   const ACTION_SCRIPT = "script.aula_attention_handle";
+  const RESTORE_SCRIPT = "script.aula_attention_restore";
   const SUBJECT_COLORS = [
     "#3578c7", "#a8556e", "#31856b", "#9b7131",
     "#7656ad", "#308491", "#ae5f35", "#587d46"
@@ -31,6 +32,7 @@ window.BeastSchool = (() => {
   let currentWeekPlan = "";
   let currentWeekPlans = new Map();
   const locallyHandledActions = new Set();
+  const locallyRestoredActions = new Set();
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -268,11 +270,20 @@ window.BeastSchool = (() => {
     }
   }
 
+  function handledActionRecords() {
+    return arrayAttribute(ACTION_REGISTRY_ENTITY, "handled")
+      .filter((item) =>
+        /^[0-9a-f]{24}$/.test(String(item?.fingerprint || "")) &&
+        !locallyRestoredActions.has(item.fingerprint)
+      )
+      .sort((left, right) =>
+        String(right?.handled_at || "").localeCompare(String(left?.handled_at || ""))
+      );
+  }
+
   function handledActionFingerprints() {
     return new Set([
-      ...arrayAttribute(ACTION_REGISTRY_ENTITY, "handled")
-        .map((item) => item?.fingerprint)
-        .filter(Boolean),
+      ...handledActionRecords().map((item) => item.fingerprint),
       ...locallyHandledActions
     ]);
   }
@@ -665,6 +676,22 @@ window.BeastSchool = (() => {
     `;
   }
 
+  function handledActionsMarkup() {
+    const childName = CHILDREN[selectedChild].fullName;
+    const count = handledActionRecords()
+      .filter((item) => !item.child || item.child === childName)
+      .length;
+    if (!count) return "";
+
+    return `
+      <button type="button" class="beast-school-handled-toggle" data-open-handled-actions>
+        <span>${t("Afsluttede Aula-punkter", "Completed Aula items")}</span>
+        <strong>${count}</strong>
+        ${BeastCore.icon("chevron-right", { size: 17 })}
+      </button>
+    `;
+  }
+
   function localDateTimeValue(value) {
     if (!value) return "";
     const date = new Date(value);
@@ -673,7 +700,14 @@ window.BeastSchool = (() => {
     return local.toISOString().slice(0, 16);
   }
 
-  function openModal({ eyebrow = "", title = "", body = "", meta = "", actionItem = null }) {
+  function openModal({
+    eyebrow = "",
+    title = "",
+    body = "",
+    bodyHtml = "",
+    meta = "",
+    actionItem = null
+  }) {
     document.getElementById("beastSchoolModal")?.remove();
 
     const overlay = document.createElement("div");
@@ -692,7 +726,7 @@ window.BeastSchool = (() => {
           </button>
         </div>
         <div class="beast-modal-body">
-          <div class="beast-school-modal-text">${escapeHtml(body)}</div>
+          <div class="beast-school-modal-text">${bodyHtml || escapeHtml(body)}</div>
           ${actionItem ? `
             <form class="beast-school-action-form" data-aula-action-form>
               <label>
@@ -743,6 +777,7 @@ window.BeastSchool = (() => {
     document.body.appendChild(overlay);
 
     if (actionItem) wireActionForm(overlay, actionItem);
+    return overlay;
   }
 
   function setActionFormState(form, message, isError = false) {
@@ -819,6 +854,7 @@ window.BeastSchool = (() => {
           description: item.detail
         })
       });
+      locallyRestoredActions.delete(item.fingerprint);
       locallyHandledActions.add(item.fingerprint);
       form.closest(".beast-modal-overlay")?.remove();
       render();
@@ -836,6 +872,64 @@ window.BeastSchool = (() => {
     });
     form.querySelector("[data-mark-complete]")?.addEventListener("click", () => {
       submitManualAction(form, item, "completed");
+    });
+  }
+
+  async function restoreHandledAction(overlay, record, button) {
+    button.disabled = true;
+    button.textContent = t("Gendanner…", "Restoring…");
+    try {
+      await BeastAuth.haFetch(`/api/services/${RESTORE_SCRIPT.replace(".", "/")}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fingerprint: record.fingerprint })
+      });
+      locallyHandledActions.delete(record.fingerprint);
+      locallyRestoredActions.add(record.fingerprint);
+      overlay.remove();
+      render();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = t("Prøv igen", "Try again");
+      BeastCore.log(`Skole: kunne ikke gendanne Aula-punkt (${error.message}).`);
+    }
+  }
+
+  function openHandledActionsModal() {
+    const childName = CHILDREN[selectedChild].fullName;
+    const records = handledActionRecords()
+      .filter((item) => !item.child || item.child === childName);
+    if (!records.length) return;
+
+    const overlay = openModal({
+      eyebrow: CHILDREN[selectedChild].name,
+      title: t("Afsluttede Aula-punkter", "Completed Aula items"),
+      bodyHtml: `
+        <div class="beast-school-handled-list">
+          ${records.map((item, index) => `
+            <div class="beast-school-handled-item">
+              <div>
+                <strong>${escapeHtml(item.title || t("Aula-punkt", "Aula item"))}</strong>
+                <small>${escapeHtml(
+                  item.resolution === "calendar"
+                    ? t("Kalenderført", "Added to calendar")
+                    : t("Markeret som klaret", "Marked complete")
+                )}</small>
+              </div>
+              <button type="button" data-restore-action="${index}">
+                ${t("Gendan", "Restore")}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `
+    });
+
+    overlay.querySelectorAll("[data-restore-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const record = records[Number(button.dataset.restoreAction)];
+        if (record) restoreHandledAction(overlay, record, button);
+      });
     });
   }
 
@@ -887,6 +981,10 @@ window.BeastSchool = (() => {
           actionItem: item.manualAction ? item : null
         });
       });
+    });
+
+    containerEl.querySelector("[data-open-handled-actions]")?.addEventListener("click", () => {
+      openHandledActionsModal();
     });
 
     containerEl.querySelector("[data-open-weekplan]")?.addEventListener("click", () => {
@@ -1004,6 +1102,7 @@ window.BeastSchool = (() => {
             ${attentionMarkup()}
           </div>
           ${weekPlanMarkup()}
+          ${handledActionsMarkup()}
         </section>
 
         <section class="beast-school-schedule-card">

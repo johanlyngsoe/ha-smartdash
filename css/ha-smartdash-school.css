@@ -129,7 +129,7 @@
 
 .beast-school-day-facts {
   display: grid;
-  grid-template-columns: .6fr .6fr 1.4fr;
+  grid-template-columns: .55fr .55fr 1.25fr .9fr;
   gap: 8px;
 }
 
@@ -156,13 +156,6 @@
   margin-top: 2px;
   color: var(--ink-muted);
   font-size: 11px;
-}
-
-.beast-school-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(285px, .72fr);
-  gap: 16px;
-  align-items: start;
 }
 
 .beast-school-schedule-card,
@@ -416,6 +409,14 @@
   box-shadow: 0 0 12px rgba(67,213,158,.75);
 }
 
+.beast-school-aula-wide {
+  margin-bottom: 16px;
+}
+
+.beast-school-aula-wide .beast-school-notices {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
 .beast-school-notices {
   display: grid;
   gap: 8px;
@@ -452,11 +453,20 @@
 
 .beast-school-notice strong,
 .beast-school-weekplan strong {
-  display: -webkit-box;
   margin-top: 3px;
-  overflow: hidden;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.beast-school-notice strong {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+}
+
+.beast-school-weekplan strong {
+  display: -webkit-box;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -555,16 +565,6 @@
   }
 }
 
-@media (max-width: 1050px) {
-  .beast-school-layout {
-    grid-template-columns: minmax(0,1fr);
-  }
-
-  .beast-school-sidebar {
-    grid-template-columns: minmax(0,1fr) minmax(220px,.45fr);
-  }
-}
-
 @media (max-width: 760px) {
   .beast-school-reminders {
     align-items: center;
@@ -599,6 +599,10 @@
 
   .beast-school-day-card {
     display: grid;
+  }
+
+  .beast-school-day-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .beast-school-day-facts > div {

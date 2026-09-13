@@ -5,17 +5,35 @@ header('Cache-Control: no-store');
 $baseDir = dirname(__DIR__);
 $dataDir = $baseDir . '/data';
 $statusFile = $dataDir . '/experience-refresh-status.json';
-$script = $baseDir . '/scripts/experience-refresh.sh';
+$requestFile = $dataDir . '/experience-refresh-request.json';
+$requestRunningFile = $requestFile . '.running';
 
-function readStatus(string $file): array {
-    if (!is_file($file)) return ['state' => 'idle', 'message' => 'Klar til opdatering'];
+function readJsonFile(string $file, array $fallback): array {
+    if (!is_file($file)) return $fallback;
     $raw = @file_get_contents($file);
     $data = $raw !== false ? json_decode($raw, true) : null;
-    return is_array($data) ? $data : ['state' => 'idle', 'message' => 'Klar til opdatering'];
+    return is_array($data) ? $data : $fallback;
+}
+
+function readStatus(string $statusFile, string $requestFile, string $requestRunningFile): array {
+    $status = readJsonFile($statusFile, []);
+    if (($status['state'] ?? '') === 'running') return $status;
+    if (is_file($requestFile) || is_file($requestRunningFile)) {
+        $request = readJsonFile(is_file($requestFile) ? $requestFile : $requestRunningFile, []);
+        return [
+            'state' => 'queued',
+            'progress' => 4,
+            'message' => 'Opdatering er sat i kø på TrueNAS',
+            'requested_at' => $request['requested_at'] ?? null,
+            'mode' => $request['mode'] ?? null,
+            'days' => $request['days'] ?? null,
+        ];
+    }
+    return $status ?: ['state' => 'idle', 'message' => 'Klar til opdatering'];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    echo json_encode(['ok' => true, 'status' => readStatus($statusFile)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['ok' => true, 'status' => readStatus($statusFile, $requestFile, $requestRunningFile)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -24,46 +42,35 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$status = readStatus($statusFile);
-if (($status['state'] ?? '') === 'running') {
+$status = readStatus($statusFile, $requestFile, $requestRunningFile);
+if (in_array($status['state'] ?? '', ['queued', 'running'], true)) {
     echo json_encode(['ok' => true, 'started' => false, 'status' => $status], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
 $body = json_decode(file_get_contents('php://input') ?: '{}', true);
-$mode = is_array($body) ? ($body['mode'] ?? 'quick') : 'quick';
+$mode = is_array($body) && ($body['mode'] ?? '') === 'full' ? 'full' : 'quick';
 $days = $mode === 'full' ? 56 : 14;
-@unlink($statusFile);
-$command = sprintf(
-    'cd %s && nohup /usr/bin/bash %s --days %d --status-file %s >/dev/null 2>&1 </dev/null & echo $!',
-    escapeshellarg($baseDir), escapeshellarg($script), $days, escapeshellarg($statusFile)
-);
-$output = [];
-$exitCode = 0;
-exec($command, $output, $exitCode);
-if ($exitCode !== 0 || empty($output)) {
+$request = [
+    'mode' => $mode,
+    'days' => $days,
+    'requested_at' => date(DATE_ATOM),
+];
+$tmp = $requestFile . '.tmp';
+$encoded = json_encode($request, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if (@file_put_contents($tmp, $encoded . "\n", LOCK_EX) === false || !@rename($tmp, $requestFile)) {
+    @unlink($tmp);
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Kunne ikke starte opdateringen fra webserveren.'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => 'Kunne ikke skrive refresh-request til data-mappen.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$started = false;
-$status = ['state' => 'idle', 'message' => 'Afventer processtart'];
-for ($i = 0; $i < 12; $i++) {
-    usleep(250000);
-    $status = readStatus($statusFile);
-    if (($status['state'] ?? '') === 'running') { $started = true; break; }
-    if (($status['state'] ?? '') === 'error') break;
-}
-if (!$started) {
-    http_response_code(500);
-    echo json_encode([
-        'ok' => false,
-        'error' => 'Processen blev startet, men skrev ingen status. Webserver-brugeren mangler sandsynligvis adgang til data-mappen eller scripts.',
-        'pid' => trim((string)($output[0] ?? '')),
-        'status' => $status,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-echo json_encode(['ok' => true, 'started' => true, 'mode' => $mode === 'full' ? 'full' : 'quick', 'days' => $days, 'status' => $status], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$status = [
+    'state' => 'queued',
+    'progress' => 4,
+    'message' => 'Opdatering er sat i kø på TrueNAS',
+    'requested_at' => $request['requested_at'],
+    'mode' => $mode,
+    'days' => $days,
+];
+echo json_encode(['ok' => true, 'started' => true, 'mode' => $mode, 'days' => $days, 'status' => $status], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

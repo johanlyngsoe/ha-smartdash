@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-13",
+  "programs": [
+    {
+      "id": "djurs-season-pass-2026",
+      "name": "Djurs Sommerland Sæsonkort 2026",
+      "owned": true,
+      "holder_count": 4,
+      "holder_count_assumption": "POC assumes all four family members have a 2026 season pass; override with DJURS_SEASON_PASS_HOLDERS.",
+      "valid_from": "2026-01-01",
+      "valid_to": "2026-12-31",
+      "source_url": "https://djurssommerland.dk/priser-og-billetter/saesonkort/",
+      "benefits": [
+        {"venue": "Djurs Sommerland", "match_terms": ["djurs sommerland"], "type": "free_entry", "discount_pct": 100},
+        {"venue": "Jesperhus Blomsterpark", "match_terms": ["jesperhus"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "Aalborg Zoo", "match_terms": ["aalborg zoo"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "Givskud ZOO", "match_terms": ["givskud zoo", "givskud"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "BonBon-Land", "match_terms": ["bonbon-land", "bonbon land"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "Odense Zoo", "match_terms": ["odense zoo"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "Universe", "match_terms": ["universe science park", "universe"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "WOW PARK", "match_terms": ["wow park"], "type": "ticket_discount", "discount_pct": 50},
+        {"venue": "Fårup Sommerland", "match_terms": ["fårup sommerland", "farup sommerland"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Fregatten Jylland", "match_terms": ["fregatten jylland"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Københavns ZOO", "match_terms": ["københavns zoo", "kobenhavns zoo"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Skandinavisk Dyrepark", "match_terms": ["skandinavisk dyrepark"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Kattegatcentret", "match_terms": ["kattegatcentret"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Kristiansand Dyrepark", "match_terms": ["kristiansand dyrepark"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Hellendoorn", "match_terms": ["hellendoorn"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Liseberg", "match_terms": ["liseberg"], "type": "ticket_discount", "discount_pct": 25},
+        {"venue": "Toverland", "match_terms": ["toverland"], "type": "ticket_discount", "discount_pct": 20},
+        {"venue": "Hunderfossen Eventyrpark", "match_terms": ["hunderfossen"], "type": "ticket_discount", "discount_pct": 25}
+      ]
+    }
+  ]
+}

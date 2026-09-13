@@ -2,18 +2,16 @@
 
 """Normalize a local Visma LogBuy activeDeals export for experience enrichment.
 
-Supports either:
-- a JSON response from /api/browserExtension/activeDeals
-- a browser HAR containing that response
-
-No credentials or bearer tokens are written to the normalized output.
+Supports either a JSON activeDeals response or a browser HAR containing it.
+Normalized output contains only deal routing data; credentials/tokens are never copied.
 """
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
-
+from urllib.parse import parse_qs, urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = BASE_DIR / "data" / "logbuy-active-deals.json"
@@ -47,12 +45,9 @@ def deals_from_har(payload):
     matched_responses = 0
     for entry in entries:
         request = entry.get("request") or {}
-        url = str(request.get("url") or "")
-        if "/api/browserExtension/activeDeals" not in url:
+        if "/api/browserExtension/activeDeals" not in str(request.get("url") or ""):
             continue
-        response = entry.get("response") or {}
-        content = response.get("content") or {}
-        text = content.get("text")
+        text = (((entry.get("response") or {}).get("content") or {}).get("text"))
         if not text:
             continue
         try:
@@ -64,7 +59,20 @@ def deals_from_har(payload):
     return deals, matched_responses
 
 
+def supplier_info_id(detailurl):
+    try:
+        query = parse_qs(urlsplit(detailurl or "").query)
+    except ValueError:
+        return None
+    for key, values in query.items():
+        if key.casefold() == "supplierinfoid" and values:
+            value = str(values[0]).strip()
+            return value if re.fullmatch(r"\d+", value) else None
+    return None
+
+
 def normalize_deals(deals):
+    """Deduplicate snapshots by SupplierInfoId, ignoring customer-specific detail URLs."""
     output = []
     seen = set()
     for deal in deals:
@@ -74,11 +82,21 @@ def normalize_deals(deals):
         detailurl = str(deal.get("detailurl") or "").strip()
         if not website and not detailurl:
             continue
-        key = (website.casefold(), detailurl.casefold())
+        supplier_id = supplier_info_id(detailurl)
+        if supplier_id:
+            key = ("supplier", supplier_id)
+        else:
+            key = ("fallback", website.casefold(), detailurl.casefold())
         if key in seen:
             continue
         seen.add(key)
-        output.append({"website": website, "detailurl": detailurl})
+        output.append(
+            {
+                "supplier_info_id": supplier_id,
+                "website": website,
+                "detailurl": detailurl,
+            }
+        )
     return output
 
 
@@ -104,15 +122,24 @@ def self_test():
         "statusCode": 200,
         "result": {
             "deals": [
-                {"website": "https://example.dk", "detailurl": "https://example.dk/deal/1"},
-                {"website": "https://example.dk", "detailurl": "https://example.dk/deal/1"},
+                {
+                    "website": "https://universe.dk",
+                    "detailurl": "https://www.mylogbuy.com/WebPages/ShowDeal/Default.aspx?SupplierInfoId=21496&CustomerId=101023",
+                },
+                {
+                    "website": "https://universe.dk",
+                    "detailurl": "https://www.mylogbuy.com/WebPages/ShowDeal/Default.aspx?SupplierInfoId=21496&CustomerId=57566",
+                },
             ]
         },
     }
     result = import_payload(payload)
     assert result["deal_count"] == 1
+    assert result["deals"][0]["supplier_info_id"] == "21496"
+    assert "CustomerId" in result["deals"][0]["detailurl"]
+    assert set(result["deals"][0]) == {"supplier_info_id", "website", "detailurl"}
     print("LOGBUY IMPORT SELF-TEST OK")
-    print("1 duplicate removed; no credentials copied")
+    print("Customer-specific snapshots deduplicated by SupplierInfoId; no credentials copied")
 
 
 def main():
@@ -132,7 +159,6 @@ def main():
     payload = load_json(args.input)
     result = import_payload(payload)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-
     if args.write:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(

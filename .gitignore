@@ -15,5 +15,8 @@ data/experiences-poc.json
 data/experiences-enriched.json
 data/logbuy-*.json
 data/logbuy*.har
+data/experience-refresh*.json
+data/experience-refresh*.lock
+data/experience-refresh*.running
 __pycache__/
 data/logs/

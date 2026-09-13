@@ -14,7 +14,9 @@ experience discovery and ranking. They belong to a later enrichment stage.
 import argparse
 import json
 import os
+import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from pathlib import Path
 
@@ -41,6 +43,42 @@ KNOWN_SOURCES = [
     "Silkeborg Handel",
     "Billetto",
     "Ticketmaster",
+]
+
+DISCOVERY_SEGMENTS = [
+    {
+        "name": "local",
+        "instruction": (
+            "Prioritize Silkeborg, Skanderborg, Aarhus and nearby areas. Search local "
+            "event calendars, libraries, city-centre associations, culture houses and "
+            "curated local media. Look especially for small events that broad national "
+            "event databases often miss."
+        ),
+    },
+    {
+        "name": "culture",
+        "instruction": (
+            "Search broadly across Jutland for festivals, theatre, workshops, science, "
+            "museums, hands-on culture and other special or time-limited family events. "
+            "Quality may justify a longer drive from Silkeborg."
+        ),
+    },
+    {
+        "name": "attractions",
+        "instruction": (
+            "Search attractions and venues across Jutland for special activities, theme "
+            "days, seasonal programmes and unusually strong evergreen experiences for "
+            "children aged 7 and 9. Prefer concrete activities over generic venue pages."
+        ),
+    },
+    {
+        "name": "broad",
+        "instruction": (
+            "Do a broad gap-finding web search for excellent family experiences that the "
+            "other searches could plausibly miss. Include ticket/event platforms and "
+            "independent event pages, but verify every candidate against a credible page."
+        ),
+    },
 ]
 
 REQUIRED_RESULT_FIELDS = [
@@ -131,6 +169,20 @@ def get_required_env(name):
     return value
 
 
+def get_int_env(name, default, minimum=1, maximum=None):
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} skal være et heltal") from exc
+    if value < minimum or (maximum is not None and value > maximum):
+        limit = f"{minimum}-{maximum}" if maximum is not None else f">= {minimum}"
+        raise RuntimeError(f"{name} skal være {limit}")
+    return value
+
+
 def build_discovery_request(start_date, end_date):
     return {
         "task": "family_experience_discovery",
@@ -175,19 +227,18 @@ def build_discovery_request(start_date, end_date):
     }
 
 
-def build_openai_prompt(discovery_request):
+def build_openai_prompt(discovery_request, segment):
     return (
-        "You are the discovery provider for a private Danish family dashboard.\n\n"
-        "Find concrete experiences that actually take place in the requested "
-        "period. Search the web broadly and verify promising candidates against "
-        "credible source pages. Favor memorable, unusual or time-limited family "
-        "experiences, while still including excellent evergreen options when they "
-        "are genuinely relevant. The source_url must point to a real page that "
-        "supports the candidate. If an exact family price cannot be established, "
-        "use null and explain what is known in price_note. Do not invent dates, "
-        "prices, age ranges or URLs. Do not use discounts or membership benefits "
-        "to decide what deserves discovery. Return roughly 10-20 strong candidates "
-        "when the web supports that many.\n\n"
+        "You are one focused discovery worker for a private Danish family dashboard.\n\n"
+        + segment["instruction"]
+        + "\n\nFind concrete experiences that actually take place in the requested period. "
+        "Search the web and verify promising candidates against credible source pages. "
+        "Favor memorable, unusual or time-limited family experiences. The source_url "
+        "must point to a real page that supports the candidate. If an exact family "
+        "price cannot be established, use null and explain what is known in price_note. "
+        "Do not invent dates, prices, age ranges or URLs. Do not use discounts or "
+        "membership benefits to decide what deserves discovery. Return only 4-8 strong "
+        "candidates from this search focus; quality is more important than count.\n\n"
         "Discovery contract:\n"
         + json.dumps(discovery_request, ensure_ascii=False, indent=2)
     )
@@ -208,19 +259,33 @@ def extract_output_text(response_data):
     return "\n".join(texts)
 
 
-def discover_with_openai(discovery_request):
-    load_env()
-    api_key = get_required_env("OPENAI_API_KEY")
-    model = os.environ.get("OPENAI_MODEL", "gpt-5").strip() or "gpt-5"
-    search_context = (
-        os.environ.get("OPENAI_SEARCH_CONTEXT", "high").strip().lower() or "high"
-    )
-    if search_context not in {"low", "medium", "high"}:
-        raise RuntimeError("OPENAI_SEARCH_CONTEXT skal være low, medium eller high")
+def normalize_key_text(value):
+    value = (value or "").casefold().strip()
+    value = re.sub(r"[^a-z0-9æøå]+", " ", value)
+    return " ".join(value.split())
 
+
+def dedupe_results(results):
+    deduped = []
+    seen = set()
+    for item in results:
+        key = (
+            normalize_key_text(item.get("title")),
+            normalize_key_text(item.get("city")),
+            (item.get("start") or "")[:10],
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def openai_segment(discovery_request, segment, api_key, model, search_context, timeout):
     payload = {
         "model": model,
         "store": False,
+        "reasoning": {"effort": "none"},
         "tools": [
             {
                 "type": "web_search",
@@ -234,7 +299,7 @@ def discover_with_openai(discovery_request):
                 },
             }
         ],
-        "input": build_openai_prompt(discovery_request),
+        "input": build_openai_prompt(discovery_request, segment),
         "text": {
             "format": {
                 "type": "json_schema",
@@ -253,7 +318,7 @@ def discover_with_openai(discovery_request):
             "Content-Type": "application/json",
         },
         json=payload,
-        timeout=180,
+        timeout=timeout,
     )
 
     if not response.ok:
@@ -261,7 +326,8 @@ def discover_with_openai(discovery_request):
         if len(detail) > 1500:
             detail = detail[:1500] + "..."
         raise RuntimeError(
-            f"OpenAI Responses API fejlede ({response.status_code}): {detail}"
+            f"OpenAI Responses API fejlede for {segment['name']} "
+            f"({response.status_code}): {detail}"
         )
 
     response_data = response.json()
@@ -270,17 +336,84 @@ def discover_with_openai(discovery_request):
     try:
         parsed = json.loads(output_text)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("OpenAI returnerede ikke gyldig JSON") from exc
+        raise RuntimeError(
+            f"OpenAI returnerede ikke gyldig JSON for {segment['name']}"
+        ) from exc
 
     results = parsed.get("results")
     if not isinstance(results, list):
-        raise RuntimeError("OpenAI-svaret mangler results-listen")
+        raise RuntimeError(f"OpenAI-svaret mangler results for {segment['name']}")
 
+    return {
+        "segment": segment["name"],
+        "response_id": response_data.get("id"),
+        "results": results,
+    }
+
+
+def discover_with_openai(discovery_request):
+    load_env()
+    api_key = get_required_env("OPENAI_API_KEY")
+    model = os.environ.get("OPENAI_MODEL", "gpt-5.6-luna").strip() or "gpt-5.6-luna"
+    search_context = (
+        os.environ.get("OPENAI_SEARCH_CONTEXT", "medium").strip().lower() or "medium"
+    )
+    if search_context not in {"low", "medium", "high"}:
+        raise RuntimeError("OPENAI_SEARCH_CONTEXT skal være low, medium eller high")
+
+    timeout = get_int_env("OPENAI_TIMEOUT_SECONDS", 120, minimum=30, maximum=600)
+    workers = get_int_env(
+        "OPENAI_DISCOVERY_WORKERS",
+        len(DISCOVERY_SEGMENTS),
+        minimum=1,
+        maximum=len(DISCOVERY_SEGMENTS),
+    )
+
+    segment_results = []
+    errors = []
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(
+                openai_segment,
+                discovery_request,
+                segment,
+                api_key,
+                model,
+                search_context,
+                timeout,
+            ): segment["name"]
+            for segment in DISCOVERY_SEGMENTS
+        }
+        for future in as_completed(futures):
+            segment_name = futures[future]
+            try:
+                segment_results.append(future.result())
+            except (requests.RequestException, RuntimeError) as exc:
+                errors.append(f"{segment_name}: {exc}")
+
+    if not segment_results:
+        raise RuntimeError("Alle discovery-søgninger fejlede: " + " | ".join(errors))
+
+    all_results = []
+    response_ids = []
+    successful_segments = []
+    for segment_result in segment_results:
+        successful_segments.append(segment_result["segment"])
+        if segment_result.get("response_id"):
+            response_ids.append(segment_result["response_id"])
+        all_results.extend(segment_result["results"])
+
+    deduped = dedupe_results(all_results)
     return {
         "provider": "openai",
         "model": model,
-        "response_id": response_data.get("id"),
-        "results": results,
+        "search_context": search_context,
+        "segments": successful_segments,
+        "response_ids": response_ids,
+        "partial_errors": errors,
+        "raw_result_count": len(all_results),
+        "deduped_result_count": len(deduped),
+        "results": deduped,
     }
 
 
@@ -291,7 +424,7 @@ def build_payload(start_date, end_date, provider_result=None):
         "request": discovery_request,
         "provider": provider_result.get("provider") if provider_result else None,
         "model": provider_result.get("model") if provider_result else None,
-        "response_id": provider_result.get("response_id") if provider_result else None,
+        "response_ids": provider_result.get("response_ids", []) if provider_result else [],
         "results": provider_result.get("results", []) if provider_result else [],
     }
 
@@ -345,13 +478,7 @@ def main():
         print(json.dumps(discovery_request, ensure_ascii=False, indent=2))
     else:
         provider_result = discover_with_openai(discovery_request)
-        print(
-            json.dumps(
-                provider_result,
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+        print(json.dumps(provider_result, ensure_ascii=False, indent=2))
 
     if args.write:
         DATA_DIR.mkdir(parents=True, exist_ok=True)

@@ -2,10 +2,10 @@
 
 """SmartDash family experience discovery POC.
 
-The collector has two modes:
+Modes:
 - contract: print the deterministic discovery request without external calls.
-- openai: use the OpenAI Responses API with web search and return structured
-  experience candidates.
+- openai: use the OpenAI Responses API with web search, then deterministically
+  de-duplicate, age-filter, rank and cluster candidates.
 
 Benefits such as LogBuy or season passes are deliberately excluded from
 experience discovery and ranking. They belong to a later enrichment stage.
@@ -95,9 +95,13 @@ REQUIRED_RESULT_FIELDS = [
     "age_min",
     "age_max",
     "age_source",
+    "age_evidence",
+    "age_evidence_url",
     "price_family",
     "price_note",
     "special_event",
+    "specialness_level",
+    "specialness_reason",
     "indoor_outdoor",
     "cluster_name",
     "why",
@@ -127,18 +131,22 @@ RESULT_SCHEMA = {
                         "type": "string",
                         "enum": ["verified", "inferred", "unknown"],
                     },
+                    "age_evidence": {"type": "string"},
+                    "age_evidence_url": {"type": "string"},
                     "price_family": {"type": ["number", "null"]},
                     "price_note": {"type": "string"},
                     "special_event": {"type": "boolean"},
+                    "specialness_level": {
+                        "type": "string",
+                        "enum": ["exceptional", "strong", "good", "standard"],
+                    },
+                    "specialness_reason": {"type": "string"},
                     "indoor_outdoor": {
                         "type": "string",
                         "enum": ["indoor", "outdoor", "mixed", "unknown"],
                     },
                     "cluster_name": {"type": ["string", "null"]},
-                    "why": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
+                    "why": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": REQUIRED_RESULT_FIELDS,
             },
@@ -146,7 +154,6 @@ RESULT_SCHEMA = {
     },
     "required": ["results"],
 }
-
 
 CITY_PROXIMITY = {
     "silkeborg": 100,
@@ -164,11 +171,20 @@ CITY_PROXIMITY = {
     "herning": 75,
     "randers": 65,
     "ebeltoft": 60,
+    "esbjerg": 55,
+    "christiansfeld": 52,
     "hadsund": 50,
     "tistrup": 42,
     "nordborg": 30,
     "samsoe": 20,
     "samsø": 20,
+}
+
+SPECIALNESS_SCORES = {
+    "exceptional": 100,
+    "strong": 90,
+    "good": 80,
+    "standard": 68,
 }
 
 
@@ -184,7 +200,6 @@ def parse_date(value):
 def load_env():
     if not ENV_FILE.exists():
         return
-
     for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -217,10 +232,7 @@ def get_int_env(name, default, minimum=1, maximum=None):
 def build_discovery_request(start_date, end_date):
     return {
         "task": "family_experience_discovery",
-        "period": {
-            "from": start_date.isoformat(),
-            "to": end_date.isoformat(),
-        },
+        "period": {"from": start_date.isoformat(), "to": end_date.isoformat()},
         "family": FAMILY_PROFILE,
         "priorities": {
             "primary": [
@@ -243,19 +255,17 @@ def build_discovery_request(start_date, end_date):
         },
         "known_sources": KNOWN_SOURCES,
         "research_instruction": (
-            "Search broadly for the most relevant and exciting family experiences "
-            "for two adults and children aged 7 and 9, starting from Silkeborg. "
-            "Use known sources, but also actively search beyond them for events "
-            "and experiences they may have missed. Prefer special events and "
-            "time-limited activities over ordinary evergreen attractions when "
-            "quality is otherwise comparable. Verify dates, venue and source URL. "
-            "Only mark age_source as verified when the source explicitly states an "
-            "age range or minimum/maximum age. Use inferred for a reasoned age estimate "
-            "and unknown when the source does not support an age judgment. "
-            "Do not rank based on discounts, memberships or season passes. "
-            "Cluster multiple activities that belong to the same festival or "
-            "umbrella event using cluster_name rather than treating every subevent "
-            "as an unrelated discovery."
+            "Search broadly for the most relevant and exciting family experiences for "
+            "two adults and children aged 7 and 9, starting from Silkeborg. Verify dates, "
+            "venue and source URL. Before returning any candidate, explicitly inspect the "
+            "source for minimum, maximum or recommended ages. If the source contains an "
+            "age restriction that excludes either child, still return the candidate with "
+            "that verified age data so deterministic filtering can reject it. Mark "
+            "age_source as verified only when age_evidence contains a concrete source fact "
+            "and age_evidence_url points to the supporting page. Use inferred only for a "
+            "reasoned estimate, otherwise unknown. Do not rank based on discounts, "
+            "memberships or season passes. Use one consistent cluster_name for every "
+            "subevent under the same festival or umbrella event across the whole weekend."
         ),
         "required_output_fields": REQUIRED_RESULT_FIELDS,
     }
@@ -268,14 +278,21 @@ def build_openai_prompt(discovery_request, segment):
         + "\n\nFind concrete experiences that actually take place in the requested period. "
         "Search the web and verify promising candidates against credible source pages. "
         "Favor memorable, unusual or time-limited family experiences. The source_url "
-        "must point to a real page that supports the candidate. If an exact family "
-        "price cannot be established, use null and explain what is known in price_note. "
-        "Do not invent dates, prices, age ranges or URLs. For age_source use verified "
-        "only when the cited source explicitly supports the age range, inferred when "
-        "you derive a sensible estimate, and unknown when no defensible age information "
-        "is available. Do not use discounts or membership benefits to decide what "
-        "deserves discovery. Return only 4-8 strong candidates from this search focus; "
-        "quality is more important than count.\n\n"
+        "must point to a real supporting page. Do not invent dates, prices, ages or URLs. "
+        "AGE CHECK IS MANDATORY: inspect each candidate's source for explicit age wording. "
+        "If there is a minimum, maximum or recommended age, capture it in age_min/age_max "
+        "and summarize the concrete source fact in age_evidence. Use verified only when "
+        "that evidence is explicit and provide the supporting page in age_evidence_url. "
+        "If there is no explicit age statement, use inferred or unknown and leave "
+        "age_evidence empty. Do not hide age-incompatible candidates; return them with the "
+        "verified restriction so the deterministic layer can reject them.\n\n"
+        "SPECIALNESS: classify exceptional only for rare flagship, highly distinctive or "
+        "especially memorable opportunities; strong for clearly special time-limited "
+        "experiences; good for worthwhile local/family activities; standard for ordinary "
+        "or evergreen options. Give a short specialness_reason.\n\n"
+        "Use the same cluster_name for all items belonging to one festival/umbrella event, "
+        "even when they occur on different dates or at different venues. Return only 4-8 "
+        "strong candidates from this search focus; quality is more important than count.\n\n"
         "Discovery contract:\n"
         + json.dumps(discovery_request, ensure_ascii=False, indent=2)
     )
@@ -289,10 +306,8 @@ def extract_output_text(response_data):
         for content in item.get("content", []):
             if content.get("type") == "output_text" and content.get("text"):
                 texts.append(content["text"])
-
     if not texts:
         raise RuntimeError("OpenAI-svaret indeholdt ingen output_text")
-
     return "\n".join(texts)
 
 
@@ -309,8 +324,9 @@ def canonical_url(value):
         parts = urlsplit(value.strip())
     except ValueError:
         return value.strip().rstrip("/").casefold()
-    path = parts.path.rstrip("/")
-    return urlunsplit((parts.scheme.casefold(), parts.netloc.casefold(), path, "", ""))
+    return urlunsplit(
+        (parts.scheme.casefold(), parts.netloc.casefold(), parts.path.rstrip("/"), "", "")
+    )
 
 
 def parse_event_day(value):
@@ -327,7 +343,6 @@ def date_ranges_overlap(left, right):
     right_start = parse_event_day(right.get("start"))
     if not left_start or not right_start:
         return True
-
     left_end = parse_event_day(left.get("end")) or left_start
     right_end = parse_event_day(right.get("end")) or right_start
     return left_start <= right_end and right_start <= left_end
@@ -346,22 +361,30 @@ def are_duplicates(left, right):
     right_url = canonical_url(right.get("source_url"))
     if left_url and left_url == right_url:
         return True
-
     if normalize_key_text(left.get("city")) != normalize_key_text(right.get("city")):
         return False
     if not date_ranges_overlap(left, right):
         return False
-
     return title_similarity(left.get("title"), right.get("title")) >= 0.80
 
 
 def richness_score(item):
     score = 0
-    for field in ("venue", "city", "source", "source_url", "event_type", "price_note"):
+    for field in (
+        "venue",
+        "city",
+        "source",
+        "source_url",
+        "event_type",
+        "price_note",
+        "specialness_reason",
+    ):
         if item.get(field):
             score += 1
     score += min(len(item.get("why") or []), 4)
     if item.get("age_source") == "verified":
+        score += 2
+    if item.get("age_evidence"):
         score += 2
     if "T" in (item.get("start") or ""):
         score += 1
@@ -371,12 +394,10 @@ def richness_score(item):
 def merge_duplicate(primary, duplicate):
     if richness_score(duplicate) > richness_score(primary):
         primary, duplicate = duplicate, primary
-
     duplicate_sources = set(primary.get("duplicate_sources") or [])
-    if duplicate.get("source_url"):
-        duplicate_sources.add(duplicate["source_url"])
-    if duplicate.get("source"):
-        duplicate_sources.add(duplicate["source"])
+    for value in (duplicate.get("source"), duplicate.get("source_url")):
+        if value:
+            duplicate_sources.add(value)
     if duplicate_sources:
         primary["duplicate_sources"] = sorted(duplicate_sources)
     return primary
@@ -397,10 +418,72 @@ def dedupe_results(results):
     return deduped
 
 
+def infer_explicit_age_from_text(item):
+    text = " ".join(
+        str(value or "")
+        for value in (
+            item.get("age_evidence"),
+            item.get("price_note"),
+            " ".join(item.get("why") or []),
+        )
+    ).casefold()
+
+    minimum_patterns = [
+        r"(?:fra|min(?:imum)?(?:salder)?|mindst)\s*(\d{1,2})\s*år",
+        r"(\d{1,2})\s*\+",
+    ]
+    maximum_patterns = [
+        r"(?:til|max(?:imum)?(?:salder)?|højst)\s*(\d{1,2})\s*år",
+    ]
+
+    minimum = None
+    maximum = None
+    for pattern in minimum_patterns:
+        match = re.search(pattern, text)
+        if match:
+            minimum = int(match.group(1))
+            break
+    for pattern in maximum_patterns:
+        match = re.search(pattern, text)
+        if match:
+            maximum = int(match.group(1))
+            break
+    return minimum, maximum
+
+
+def normalize_age_evidence(item):
+    normalized = dict(item)
+    source = normalized.get("age_source")
+    evidence = (normalized.get("age_evidence") or "").strip()
+    evidence_url = (normalized.get("age_evidence_url") or "").strip()
+    age_min = normalized.get("age_min")
+    age_max = normalized.get("age_max")
+
+    text_min, text_max = infer_explicit_age_from_text(normalized)
+    if age_min is None and text_min is not None:
+        age_min = text_min
+    if age_max is None and text_max is not None:
+        age_max = text_max
+
+    has_concrete_age = age_min is not None or age_max is not None
+    has_verified_evidence = bool(evidence and evidence_url and has_concrete_age)
+
+    if source == "verified" and not has_verified_evidence:
+        source = "inferred" if has_concrete_age else "unknown"
+    elif source != "verified" and has_concrete_age and evidence and evidence_url:
+        source = "verified"
+
+    normalized["age_source"] = source
+    normalized["age_min"] = age_min
+    normalized["age_max"] = age_max
+    normalized["age_evidence"] = evidence
+    normalized["age_evidence_url"] = evidence_url
+    return normalized
+
+
 def age_filter_reason(item):
     if item.get("age_source") != "verified":
         return None
-
     age_min = item.get("age_min")
     age_max = item.get("age_max")
     for child_age in FAMILY_PROFILE["children_ages"]:
@@ -425,47 +508,61 @@ def age_match_score(item):
         return 100
     if source == "inferred":
         return 82
-    return 70
+    return 68
 
 
 def evidence_score(item):
-    score = 55
+    score = 50
     if item.get("source_url"):
         score += 15
     if item.get("source"):
         score += 10
     if item.get("venue"):
         score += 5
-    if item.get("age_source") == "verified":
-        score += 10
     if item.get("why"):
         score += min(len(item["why"]), 3) * 2
+    if item.get("age_source") == "verified" and item.get("age_evidence"):
+        score += 14
     return min(score, 100)
+
+
+def specialness_score(item):
+    level = item.get("specialness_level") or "standard"
+    score = SPECIALNESS_SCORES.get(level, SPECIALNESS_SCORES["standard"])
+    if not item.get("special_event"):
+        score = min(score, 60)
+    return score
 
 
 def add_family_fit(item):
     age_score = age_match_score(item)
-    special_score = 100 if item.get("special_event") else 55
+    special_score = specialness_score(item)
     near_score = proximity_score(item.get("city"))
     source_score = evidence_score(item)
 
     total = round(
-        age_score * 0.40
-        + special_score * 0.30
+        age_score * 0.35
+        + special_score * 0.35
         + near_score * 0.20
         + source_score * 0.10
     )
 
     reasons = []
     if item.get("age_source") == "verified":
-        reasons.append("Aldersmatch er verificeret i kilden")
+        reasons.append("Aldersmatch er verificeret med konkret kildeevidens")
     elif item.get("age_source") == "inferred":
-        reasons.append("Aldersmatch er vurderet, men ikke eksplicit angivet i kilden")
+        reasons.append("Aldersmatch er vurderet, men ikke eksplicit dokumenteret")
     else:
         reasons.append("Aldersmatch er ukendt")
 
-    if item.get("special_event"):
-        reasons.append("Tidsbegrænset eller særlig oplevelse")
+    level_labels = {
+        "exceptional": "Sjælden eller usædvanligt stærk oplevelse",
+        "strong": "Tydeligt særlig og mindeværdig oplevelse",
+        "good": "God familieoplevelse",
+        "standard": "Mere almindelig oplevelse",
+    }
+    reasons.append(level_labels.get(item.get("specialness_level"), "Oplevelsesværdi vurderet"))
+
     if near_score >= 90:
         reasons.append("Meget tæt på Silkeborg")
     elif near_score >= 75:
@@ -490,14 +587,33 @@ def cluster_key(item):
     if not name:
         return None
     city = normalize_key_text(item.get("city"))
-    event_day = (item.get("start") or "")[:10]
-    return (name, city, event_day)
+    return (name, city)
+
+
+def earliest_start(items):
+    values = [item.get("start") for item in items if item.get("start")]
+    return min(values) if values else ""
+
+
+def latest_end(items):
+    values = [item.get("end") for item in items if item.get("end")]
+    return max(values) if values else ""
+
+
+def representative_for_cluster(items):
+    return max(
+        items,
+        key=lambda item: (
+            normalize_key_text(item.get("event_type")) in {"festival", "familiefestival"},
+            item.get("family_fit", {}).get("score", 0),
+            richness_score(item),
+        ),
+    )
 
 
 def cluster_results(results):
     clusters = {}
     singles = []
-
     for item in results:
         key = cluster_key(item)
         if key is None:
@@ -513,23 +629,30 @@ def cluster_results(results):
 
         items = sorted(
             items,
-            key=lambda value: value.get("family_fit", {}).get("score", 0),
-            reverse=True,
+            key=lambda value: (
+                value.get("start") or "",
+                -(value.get("family_fit", {}).get("score", 0)),
+            ),
         )
-        representative = dict(items[0])
+        representative = dict(representative_for_cluster(items))
         representative["title"] = representative.get("cluster_name") or representative["title"]
+        representative["start"] = earliest_start(items)
+        representative["end"] = latest_end(items)
         representative["cluster_size"] = len(items)
         representative["cluster_items"] = [
             {
                 "title": item.get("title"),
                 "start": item.get("start"),
+                "end": item.get("end"),
                 "venue": item.get("venue"),
                 "source_url": item.get("source_url"),
                 "family_fit_score": item.get("family_fit", {}).get("score"),
             }
             for item in items
         ]
+        best_score = max(item.get("family_fit", {}).get("score", 0) for item in items)
         representative["family_fit"] = dict(representative["family_fit"])
+        representative["family_fit"]["score"] = best_score
         representative["family_fit"]["explanation"] = list(
             representative["family_fit"].get("explanation") or []
         ) + [f"Samler {len(items)} relevante aktiviteter under samme event"]
@@ -543,26 +666,30 @@ def cluster_results(results):
 
 
 def postprocess_results(results):
-    deduped = dedupe_results(results)
+    normalized = [normalize_age_evidence(item) for item in results]
+    deduped = dedupe_results(normalized)
     rejected = []
     eligible = []
 
     for item in deduped:
         reason = age_filter_reason(item)
         if reason:
-            rejected.append({
-                "title": item.get("title"),
-                "source_url": item.get("source_url"),
-                "reason": reason,
-            })
+            rejected.append(
+                {
+                    "title": item.get("title"),
+                    "source_url": item.get("source_url"),
+                    "age_evidence": item.get("age_evidence"),
+                    "age_evidence_url": item.get("age_evidence_url"),
+                    "reason": reason,
+                }
+            )
             continue
         eligible.append(add_family_fit(item))
 
-    clustered = cluster_results(eligible)
     return {
         "deduped": deduped,
         "rejected": rejected,
-        "results": clustered,
+        "results": cluster_results(eligible),
     }
 
 
@@ -605,7 +732,6 @@ def openai_segment(discovery_request, segment, api_key, model, search_context, t
         json=payload,
         timeout=timeout,
     )
-
     if not response.ok:
         detail = response.text.strip()
         if len(detail) > 1500:
@@ -616,19 +742,15 @@ def openai_segment(discovery_request, segment, api_key, model, search_context, t
         )
 
     response_data = response.json()
-    output_text = extract_output_text(response_data)
-
     try:
-        parsed = json.loads(output_text)
+        parsed = json.loads(extract_output_text(response_data))
     except json.JSONDecodeError as exc:
         raise RuntimeError(
             f"OpenAI returnerede ikke gyldig JSON for {segment['name']}"
         ) from exc
-
     results = parsed.get("results")
     if not isinstance(results, list):
         raise RuntimeError(f"OpenAI-svaret mangler results for {segment['name']}")
-
     return {
         "segment": segment["name"],
         "response_id": response_data.get("id"),
@@ -722,18 +844,10 @@ def main():
         description="POC collector for family experience discovery."
     )
     parser.add_argument(
-        "--from",
-        dest="start_date",
-        type=parse_date,
-        required=True,
-        help="Startdato YYYY-MM-DD",
+        "--from", dest="start_date", type=parse_date, required=True, help="Startdato YYYY-MM-DD"
     )
     parser.add_argument(
-        "--to",
-        dest="end_date",
-        type=parse_date,
-        required=True,
-        help="Slutdato YYYY-MM-DD",
+        "--to", dest="end_date", type=parse_date, required=True, help="Slutdato YYYY-MM-DD"
     )
     parser.add_argument(
         "--provider",
@@ -752,7 +866,6 @@ def main():
         parser.error("--to må ikke ligge før --from")
 
     discovery_request = build_discovery_request(args.start_date, args.end_date)
-
     print("=== EXPERIENCE COLLECTOR POC ===")
     print(f"Periode: {args.start_date} -> {args.end_date}")
     print(f"Udgangspunkt: {FAMILY_PROFILE['home']}")
@@ -761,7 +874,6 @@ def main():
     print()
 
     provider_result = None
-
     if args.provider == "contract":
         print(json.dumps(discovery_request, ensure_ascii=False, indent=2))
     else:
@@ -785,7 +897,6 @@ def main():
         )
         print()
         print(f"Skrevet: {OUTPUT_FILE}")
-
     return 0
 
 

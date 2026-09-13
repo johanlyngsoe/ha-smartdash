@@ -14,5 +14,6 @@ data/*.env
 data/experiences-poc.json
 data/experiences-enriched.json
 data/logbuy-*.json
+data/logbuy*.har
 __pycache__/
 data/logs/

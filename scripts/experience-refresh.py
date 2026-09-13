@@ -2,9 +2,10 @@
 
 """Run the complete SmartDash experience pipeline.
 
-Discovery -> ranking -> benefit enrichment -> persistent SQLite store -> JSON snapshot.
-The JSON snapshot remains the current UI contract, while SQLite provides history and
-prevents good future events from disappearing just because one discovery run misses them.
+Discovery -> ranking -> benefit enrichment -> persistent SQLite store -> de-duplication
+-> JSON snapshot. The JSON snapshot remains the current UI contract, while SQLite
+provides history and prevents good future events from disappearing just because one
+discovery run misses them.
 """
 
 import argparse
@@ -86,24 +87,50 @@ def enrich_payload(payload, benefits):
     return output
 
 
+def add_coverage_segments(collector, sources):
+    local_retail_sources = [
+        value for value in sources
+        if value in {"HvadErPå.dk", "Lagkagehuset arrangementer og kampagner", "Silkeborg Handel"}
+    ]
+    remaining_sources = [value for value in sources if value not in local_retail_sources]
+
+    segments = list(collector.DISCOVERY_SEGMENTS)
+    if local_retail_sources:
+        segments.append({
+            "name": "local_retail_sources",
+            "instruction": (
+                "LOCAL/RETAIL SOURCE COVERAGE: explicitly search these sources: "
+                + ", ".join(local_retail_sources)
+                + ". Search the requested dates carefully for small local one-off family activities, "
+                  "shop/city-centre events, children's food workshops, bakery/chocolate/flødebolle "
+                  "activities, decorating classes and free reservation events. Prefer concrete event "
+                  "pages over generic venue pages. Do not stop after finding one event."
+            ),
+        })
+    if remaining_sources:
+        segments.append({
+            "name": "fixed_sources",
+            "instruction": (
+                "FIXED SOURCE COVERAGE: explicitly search EVERY source in this list before finishing: "
+                + ", ".join(remaining_sources)
+                + ". Do not assume the broad searches cover them. Look for concrete dated family "
+                  "events in the requested period. Pay special attention to small local one-off "
+                  "activities, workshops and children's events. Return the strongest candidates even "
+                  "when they also appear on another site."
+            ),
+        })
+    collector.DISCOVERY_SEGMENTS = segments
+
+
 def run_refresh(start_date, end_date):
     collector = load_module("smartdash_experience_collector", BASE_DIR / "scripts" / "experience-collector.py")
     benefits = load_module("smartdash_experience_benefits", BASE_DIR / "scripts" / "experience-benefits.py")
     store = load_module("smartdash_experience_store", BASE_DIR / "scripts" / "experience-store.py")
+    dedupe = load_module("smartdash_experience_dedupe", BASE_DIR / "scripts" / "experience-dedupe.py")
 
     sources = load_known_sources()
     collector.KNOWN_SOURCES = sources
-    fixed_instruction = (
-        "FIXED SOURCE COVERAGE: explicitly search EVERY source in this list before finishing: "
-        + ", ".join(sources)
-        + ". Do not assume the broad searches cover them. Look for concrete dated family events "
-          "in the requested period. Pay special attention to small local one-off activities, "
-          "including workshops, children's food/craft events and retailer events. Return the "
-          "strongest candidates even when they also appear on another site."
-    )
-    collector.DISCOVERY_SEGMENTS = list(collector.DISCOVERY_SEGMENTS) + [
-        {"name": "fixed_sources", "instruction": fixed_instruction}
-    ]
+    add_coverage_segments(collector, sources)
 
     discovery_request = collector.build_discovery_request(start_date, end_date)
     provider_result = collector.discover_with_openai(discovery_request)
@@ -113,7 +140,9 @@ def run_refresh(start_date, end_date):
 
     enriched_payload = enrich_payload(raw_payload, benefits)
     conn = store.connect(DB_FILE)
-    refresh_id, active_count = store.upsert_payload(conn, enriched_payload)
+    refresh_id, _ = store.upsert_payload(conn, enriched_payload)
+    dedupe_result = dedupe.dedupe(conn)
+    active_count = conn.execute("SELECT COUNT(*) FROM experiences WHERE active=1").fetchone()[0]
     snapshot = store.export_snapshot(conn, enriched_payload, ENRICHED_OUTPUT)
 
     return {
@@ -125,6 +154,7 @@ def run_refresh(start_date, end_date):
         "clustered_result_count": provider_result.get("clustered_result_count"),
         "incoming_enriched_count": len(enriched_payload.get("results") or []),
         "database_active_count": active_count,
+        "duplicates_removed": dedupe_result.get("duplicates_removed", 0),
         "snapshot_count": len(snapshot.get("results") or []),
         "refresh_id": refresh_id,
         "database": str(DB_FILE),
@@ -136,15 +166,23 @@ def self_test():
     collector = load_module("smartdash_experience_collector_test", BASE_DIR / "scripts" / "experience-collector.py")
     benefits = load_module("smartdash_experience_benefits_test", BASE_DIR / "scripts" / "experience-benefits.py")
     store = load_module("smartdash_experience_store_test", BASE_DIR / "scripts" / "experience-store.py")
+    dedupe = load_module("smartdash_experience_dedupe_test", BASE_DIR / "scripts" / "experience-dedupe.py")
     sources = load_known_sources()
     assert "HvadErPå.dk" in sources
+    assert "Lagkagehuset arrangementer og kampagner" in sources
     assert "Bio Silkeborg" in sources
     assert "Jysk Musikteater" in sources
+    original_count = len(collector.DISCOVERY_SEGMENTS)
+    add_coverage_segments(collector, sources)
+    added_names = [item.get("name") for item in collector.DISCOVERY_SEGMENTS[original_count:]]
+    assert "local_retail_sources" in added_names
+    assert "fixed_sources" in added_names
     collector.run_self_test()
     benefits.self_test(benefits.load_json(benefits.CONFIG_FILE))
     store.self_test()
+    dedupe.self_test()
     print("EXPERIENCE REFRESH SELF-TEST OK")
-    print(f"fixed sources loaded: {len(sources)}")
+    print(f"fixed sources loaded: {len(sources)}; targeted local/retail coverage enabled")
 
 
 def main():

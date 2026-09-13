@@ -3,8 +3,8 @@
 """Enrich ranked SmartDash experiences with family benefit programmes.
 
 Input is the JSON written by scripts/experience-collector.py --write.
-Discovery/Experience Score is never changed here. This stage only adds benefit
-matches, effective family price and a separate Value Score.
+Discovery/Experience Score is never changed here. This stage validates price data,
+adds benefit matches, effective family price and a separate Value Score.
 """
 
 import argparse
@@ -149,8 +149,66 @@ def match_logbuy(item, deals):
     return matches
 
 
-def best_price(item, benefit_matches):
-    normal = item.get("price_family")
+def parse_danish_number(value):
+    return float(str(value).replace(".", "").replace(",", "."))
+
+
+def explicit_price_equation(price_note):
+    """Return deterministic total when a note contains e.g. 2 × 125 + 2 × 65 = 380."""
+    text = (price_note or "").replace("*", "×")
+    equation = re.search(
+        r"(\d+)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:kr\.?)?\s*\+\s*"
+        r"(\d+)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:kr\.?)?"
+        r"(?:\s*=\s*(\d+(?:[.,]\d+)?)\s*(?:kr\.?)?)?",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not equation:
+        return None
+    count_a, price_a, count_b, price_b, stated = equation.groups()
+    computed = int(count_a) * parse_danish_number(price_a) + int(count_b) * parse_danish_number(price_b)
+    stated_value = parse_danish_number(stated) if stated else None
+    return {
+        "computed": round(computed, 2),
+        "stated": round(stated_value, 2) if stated_value is not None else None,
+        "expression": equation.group(0),
+    }
+
+
+def validate_family_price(item):
+    raw = item.get("price_family")
+    try:
+        raw_value = float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        raw_value = None
+
+    equation = explicit_price_equation(item.get("price_note"))
+    if equation is None:
+        return {
+            "status": "unverified" if raw_value is not None else "unknown",
+            "original": raw_value,
+            "validated": raw_value,
+            "reason": "Ingen deterministisk prisformel fundet i price_note.",
+        }
+
+    computed = equation["computed"]
+    stated = equation["stated"]
+    inconsistencies = []
+    if raw_value is not None and abs(raw_value - computed) > 0.01:
+        inconsistencies.append(f"price_family={raw_value:g} afviger fra beregnet {computed:g}")
+    if stated is not None and abs(stated - computed) > 0.01:
+        inconsistencies.append(f"angivet sum={stated:g} afviger fra beregnet {computed:g}")
+
+    return {
+        "status": "corrected" if inconsistencies else "verified",
+        "original": raw_value,
+        "validated": computed,
+        "reason": "; ".join(inconsistencies) if inconsistencies else "Prisformlen stemmer matematisk.",
+        "expression": equation["expression"],
+    }
+
+
+def best_price(normal, benefit_matches):
     if normal is None:
         return None, None, None
     try:
@@ -198,8 +256,9 @@ def enrich_item(item, catalog, logbuy_deals):
     logbuy_matches = match_logbuy(item, logbuy_deals)
     all_matches = catalog_matches + logbuy_matches
 
-    effective, saving, applied = best_price(item, catalog_matches)
-    normal = item.get("price_family")
+    price_validation = validate_family_price(item)
+    normal = price_validation["validated"]
+    effective, saving, applied = best_price(normal, catalog_matches)
     score = value_score(normal, effective, saving)
 
     enriched["benefits"] = all_matches
@@ -210,9 +269,8 @@ def enrich_item(item, catalog, logbuy_deals):
         "score": score,
         "applied_program": applied.get("program") if applied else None,
         "applied_discount_pct": applied.get("discount_pct") if applied else None,
-        "note": (
-            "Experience Score er uændret; Value Score vurderer kun pris/besparelse."
-        ),
+        "price_validation": price_validation,
+        "note": "Experience Score er uændret; Value Score vurderer kun valideret pris/besparelse.",
     }
     return enriched
 
@@ -226,14 +284,26 @@ def self_test(catalog):
         "source_url": "https://universe.dk/oplevelser/events/mini-spionerne/",
         "start": "2026-09-19T10:00:00+02:00",
         "price_family": 740,
+        "price_note": "4 × 185 = 740 kr.",
     }
     matches = match_catalog_benefits(universe, catalog)
-    effective, saving, applied = best_price(universe, matches)
+    validation = validate_family_price(universe)
+    effective, saving, applied = best_price(validation["validated"], matches)
     assert applied and applied["discount_pct"] == 50
     assert effective == 370.0
     assert saving == 370.0
+
+    solfestival = {
+        "price_family": 315,
+        "price_note": "Voksne 125 kr. hver og børn under 12 år 65 kr. hver; 2 × 125 + 2 × 65 = 380 kr.",
+    }
+    validation = validate_family_price(solfestival)
+    assert validation["status"] == "corrected"
+    assert validation["validated"] == 380.0
+
     print("BENEFIT SELF-TEST OK")
     print("Universe: 740 kr -> 370 kr with Djurs 50% benefit")
+    print("Price validation: Solfestival 315 kr corrected to 380 kr")
 
 
 def main():
@@ -264,10 +334,21 @@ def main():
         reverse=True,
     )
 
+    corrected_prices = sum(
+        item.get("value", {}).get("price_validation", {}).get("status") == "corrected"
+        for item in enriched
+    )
+    possible_logbuy_matches = sum(
+        any(benefit.get("program") == "Visma LogBuy" for benefit in item.get("benefits", []))
+        for item in enriched
+    )
+
     output = dict(payload)
     output["benefit_enrichment"] = {
         "catalog": str(CONFIG_FILE.relative_to(BASE_DIR)),
         "logbuy_active_deals_loaded": len(logbuy_deals),
+        "logbuy_possible_matches": possible_logbuy_matches,
+        "price_corrections": corrected_prices,
         "djurs_pass_holders": program_holder_count(catalog["programs"][0]),
     }
     output["results"] = enriched

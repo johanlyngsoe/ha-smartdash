@@ -11,5 +11,8 @@ data/version-snapshots/
 
 data/*.db*
 data/*.env
+data/experiences-poc.json
+data/experiences-enriched.json
+data/logbuy-*.json
 __pycache__/
 data/logs/

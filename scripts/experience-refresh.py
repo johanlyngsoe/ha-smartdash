@@ -88,25 +88,26 @@ def enrich_payload(payload, benefits):
 
 
 def add_coverage_segments(collector, sources):
-    local_retail_sources = [
+    portal_sources = [
         value for value in sources
-        if value in {"HvadErPå.dk", "Lagkagehuset arrangementer og kampagner", "Silkeborg Handel"}
+        if value in {"HvadErPå.dk", "Silkeborg Handel"}
     ]
-    remaining_sources = [value for value in sources if value not in local_retail_sources]
+    remaining_sources = [value for value in sources if value not in portal_sources]
 
     segments = list(collector.DISCOVERY_SEGMENTS)
-    if local_retail_sources:
-        segments.append({
-            "name": "local_retail_sources",
-            "instruction": (
-                "LOCAL/RETAIL SOURCE COVERAGE: explicitly search these sources: "
-                + ", ".join(local_retail_sources)
-                + ". Search the requested dates carefully for small local one-off family activities, "
-                  "shop/city-centre events, children's food workshops, bakery/chocolate/flødebolle "
-                  "activities, decorating classes and free reservation events. Prefer concrete event "
-                  "pages over generic venue pages. Do not stop after finding one event."
-            ),
-        })
+    segments.append({
+        "name": "local_retail_sources",
+        "instruction": (
+            "LOCAL/RETAIL COVERAGE: search broadly for small local one-off family activities "
+            "that ordinary attraction/event searches often miss. Include independent retailers, "
+            "bakeries, cafés, shopping centres, city-centre associations and local businesses' own "
+            "event or campaign pages. Search especially for children's food workshops, chocolate "
+            "or confectionery activities, decorating classes, craft events and free reservation "
+            "events. Use local event portals as leads but verify candidates against credible pages. "
+            + (("Explicitly include these useful local portals: " + ", ".join(portal_sources) + ". ") if portal_sources else "")
+            + "Do not target or depend on any single retailer or brand."
+        ),
+    })
     if remaining_sources:
         segments.append({
             "name": "fixed_sources",
@@ -169,20 +170,24 @@ def self_test():
     dedupe = load_module("smartdash_experience_dedupe_test", BASE_DIR / "scripts" / "experience-dedupe.py")
     sources = load_known_sources()
     assert "HvadErPå.dk" in sources
-    assert "Lagkagehuset arrangementer og kampagner" in sources
+    assert all("Lagkagehuset" not in value for value in sources)
     assert "Bio Silkeborg" in sources
     assert "Jysk Musikteater" in sources
     original_count = len(collector.DISCOVERY_SEGMENTS)
     add_coverage_segments(collector, sources)
-    added_names = [item.get("name") for item in collector.DISCOVERY_SEGMENTS[original_count:]]
+    added = collector.DISCOVERY_SEGMENTS[original_count:]
+    added_names = [item.get("name") for item in added]
     assert "local_retail_sources" in added_names
     assert "fixed_sources" in added_names
+    local_instruction = next(item["instruction"] for item in added if item.get("name") == "local_retail_sources")
+    assert "single retailer or brand" in local_instruction
+    assert "Lagkagehuset" not in local_instruction
     collector.run_self_test()
     benefits.self_test(benefits.load_json(benefits.CONFIG_FILE))
     store.self_test()
     dedupe.self_test()
     print("EXPERIENCE REFRESH SELF-TEST OK")
-    print(f"fixed sources loaded: {len(sources)}; targeted local/retail coverage enabled")
+    print(f"fixed sources loaded: {len(sources)}; generic local/retail coverage enabled")
 
 
 def main():

@@ -10,6 +10,6 @@ data/update-check-cache-*.json
 data/version-snapshots/
 
 data/*.db*
-data/price-collector.env
+data/*.env
 __pycache__/
 data/logs/

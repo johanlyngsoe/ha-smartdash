@@ -6,6 +6,7 @@ Modes:
 - contract: print the deterministic discovery request without external calls.
 - openai: use the OpenAI Responses API with web search, then deterministically
   de-duplicate, age-filter, rank and cluster candidates.
+- self-test: validate deterministic age and travel scoring without external calls.
 
 Benefits such as LogBuy or season passes are deliberately excluded from
 experience discovery and ranking. They belong to a later enrichment stage.
@@ -104,6 +105,12 @@ REQUIRED_RESULT_FIELDS = [
     "specialness_reason",
     "indoor_outdoor",
     "cluster_name",
+    "travel_minutes",
+    "travel_distance_km",
+    "travel_requires_ferry",
+    "travel_source",
+    "travel_evidence",
+    "travel_evidence_url",
     "why",
 ]
 
@@ -146,6 +153,15 @@ RESULT_SCHEMA = {
                         "enum": ["indoor", "outdoor", "mixed", "unknown"],
                     },
                     "cluster_name": {"type": ["string", "null"]},
+                    "travel_minutes": {"type": ["integer", "null"]},
+                    "travel_distance_km": {"type": ["number", "null"]},
+                    "travel_requires_ferry": {"type": "boolean"},
+                    "travel_source": {
+                        "type": "string",
+                        "enum": ["verified", "inferred", "unknown"],
+                    },
+                    "travel_evidence": {"type": "string"},
+                    "travel_evidence_url": {"type": "string"},
                     "why": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": REQUIRED_RESULT_FIELDS,
@@ -155,7 +171,7 @@ RESULT_SCHEMA = {
     "required": ["results"],
 }
 
-CITY_PROXIMITY = {
+FALLBACK_CITY_PROXIMITY = {
     "silkeborg": 100,
     "them": 96,
     "engesvang": 94,
@@ -171,13 +187,15 @@ CITY_PROXIMITY = {
     "herning": 75,
     "randers": 65,
     "ebeltoft": 60,
-    "esbjerg": 55,
-    "christiansfeld": 52,
-    "hadsund": 50,
-    "tistrup": 42,
-    "nordborg": 30,
-    "samsoe": 20,
-    "samsø": 20,
+    "esbjerg": 44,
+    "christiansfeld": 44,
+    "hadsund": 44,
+    "storvorde": 40,
+    "tistrup": 38,
+    "jyderup": 28,
+    "nordborg": 25,
+    "samsoe": 12,
+    "samsø": 12,
 }
 
 SPECIALNESS_SCORES = {
@@ -240,7 +258,7 @@ def build_discovery_request(start_date, end_date):
                 "age relevance",
                 "special or time-limited events",
                 "interesting or memorable experience",
-                "reasonable travel time from Silkeborg",
+                "practical one-way travel time from Silkeborg",
             ],
             "secondary": [
                 "normal family price",
@@ -263,7 +281,11 @@ def build_discovery_request(start_date, end_date):
             "that verified age data so deterministic filtering can reject it. Mark "
             "age_source as verified only when age_evidence contains a concrete source fact "
             "and age_evidence_url points to the supporting page. Use inferred only for a "
-            "reasoned estimate, otherwise unknown. Do not rank based on discounts, "
+            "reasoned estimate, otherwise unknown. Also estimate practical one-way travel "
+            "time from Silkeborg, including ferry/waiting when a ferry is required. Mark "
+            "travel_source as verified only with supporting route/travel evidence and URL; "
+            "otherwise use inferred or unknown. Set travel_requires_ferry true whenever "
+            "the trip requires a ferry, including Samsø. Do not rank based on discounts, "
             "memberships or season passes. Use one consistent cluster_name for every "
             "subevent under the same festival or umbrella event across the whole weekend."
         ),
@@ -286,6 +308,14 @@ def build_openai_prompt(discovery_request, segment):
         "If there is no explicit age statement, use inferred or unknown and leave "
         "age_evidence empty. Do not hide age-incompatible candidates; return them with the "
         "verified restriction so the deterministic layer can reject them.\n\n"
+        "TRAVEL CHECK IS MANDATORY: estimate practical one-way travel from Silkeborg to the "
+        "venue, not straight-line distance. Include realistic ferry/waiting time where "
+        "relevant. Return travel_minutes and travel_distance_km when defensible. Set "
+        "travel_requires_ferry=true for destinations such as Samsø that require a ferry. "
+        "Use travel_source=verified only when travel_evidence and travel_evidence_url "
+        "support the route/travel estimate; otherwise use inferred or unknown. Do not "
+        "pretend an island or cross-country destination is an ordinary day-trip merely "
+        "because its straight-line distance is short.\n\n"
         "SPECIALNESS: classify exceptional only for rare flagship, highly distinctive or "
         "especially memorable opportunities; strong for clearly special time-limited "
         "experiences; good for worthwhile local/family activities; standard for ordinary "
@@ -378,6 +408,7 @@ def richness_score(item):
         "event_type",
         "price_note",
         "specialness_reason",
+        "travel_evidence",
     ):
         if item.get(field):
             score += 1
@@ -385,6 +416,8 @@ def richness_score(item):
     if item.get("age_source") == "verified":
         score += 2
     if item.get("age_evidence"):
+        score += 2
+    if item.get("travel_source") == "verified":
         score += 2
     if "T" in (item.get("start") or ""):
         score += 1
@@ -427,7 +460,6 @@ def infer_explicit_age_from_text(item):
             " ".join(item.get("why") or []),
         )
     ).casefold()
-
     minimum_patterns = [
         r"(?:fra|min(?:imum)?(?:salder)?|mindst)\s*(\d{1,2})\s*år",
         r"(\d{1,2})\s*\+",
@@ -435,9 +467,7 @@ def infer_explicit_age_from_text(item):
     maximum_patterns = [
         r"(?:til|max(?:imum)?(?:salder)?|højst)\s*(\d{1,2})\s*år",
     ]
-
-    minimum = None
-    maximum = None
+    minimum = maximum = None
     for pattern in minimum_patterns:
         match = re.search(pattern, text)
         if match:
@@ -458,26 +488,50 @@ def normalize_age_evidence(item):
     evidence_url = (normalized.get("age_evidence_url") or "").strip()
     age_min = normalized.get("age_min")
     age_max = normalized.get("age_max")
-
     text_min, text_max = infer_explicit_age_from_text(normalized)
     if age_min is None and text_min is not None:
         age_min = text_min
     if age_max is None and text_max is not None:
         age_max = text_max
-
     has_concrete_age = age_min is not None or age_max is not None
     has_verified_evidence = bool(evidence and evidence_url and has_concrete_age)
-
     if source == "verified" and not has_verified_evidence:
         source = "inferred" if has_concrete_age else "unknown"
     elif source != "verified" and has_concrete_age and evidence and evidence_url:
         source = "verified"
-
     normalized["age_source"] = source
     normalized["age_min"] = age_min
     normalized["age_max"] = age_max
     normalized["age_evidence"] = evidence
     normalized["age_evidence_url"] = evidence_url
+    return normalized
+
+
+def normalize_travel_evidence(item):
+    normalized = dict(item)
+    source = normalized.get("travel_source") or "unknown"
+    evidence = (normalized.get("travel_evidence") or "").strip()
+    evidence_url = (normalized.get("travel_evidence_url") or "").strip()
+    minutes = normalized.get("travel_minutes")
+    distance = normalized.get("travel_distance_km")
+    ferry = bool(normalized.get("travel_requires_ferry"))
+
+    if minutes is not None:
+        minutes = max(0, int(minutes))
+    if distance is not None:
+        distance = max(0.0, float(distance))
+
+    if source == "verified" and not (evidence and evidence_url and minutes is not None):
+        source = "inferred" if minutes is not None else "unknown"
+    elif source != "verified" and evidence and evidence_url and minutes is not None:
+        source = "verified"
+
+    normalized["travel_source"] = source
+    normalized["travel_evidence"] = evidence
+    normalized["travel_evidence_url"] = evidence_url
+    normalized["travel_minutes"] = minutes
+    normalized["travel_distance_km"] = distance
+    normalized["travel_requires_ferry"] = ferry
     return normalized
 
 
@@ -494,12 +548,46 @@ def age_filter_reason(item):
     return None
 
 
-def proximity_score(city):
+def proximity_from_minutes(minutes):
+    if minutes <= 20:
+        return 100
+    if minutes <= 35:
+        return 94
+    if minutes <= 50:
+        return 88
+    if minutes <= 65:
+        return 82
+    if minutes <= 80:
+        return 74
+    if minutes <= 100:
+        return 66
+    if minutes <= 120:
+        return 56
+    if minutes <= 150:
+        return 44
+    if minutes <= 180:
+        return 32
+    return 20
+
+
+def fallback_proximity(city):
     normalized = normalize_key_text(city)
-    for key, score in CITY_PROXIMITY.items():
+    for key, score in FALLBACK_CITY_PROXIMITY.items():
         if normalize_key_text(key) in normalized:
             return score
-    return 55
+    return 45
+
+
+def proximity_score(item):
+    minutes = item.get("travel_minutes")
+    if minutes is not None:
+        score = proximity_from_minutes(minutes)
+    else:
+        score = fallback_proximity(item.get("city"))
+
+    if item.get("travel_requires_ferry"):
+        score = min(score, 15)
+    return score
 
 
 def age_match_score(item):
@@ -522,7 +610,9 @@ def evidence_score(item):
     if item.get("why"):
         score += min(len(item["why"]), 3) * 2
     if item.get("age_source") == "verified" and item.get("age_evidence"):
-        score += 14
+        score += 10
+    if item.get("travel_source") == "verified" and item.get("travel_evidence"):
+        score += 4
     return min(score, 100)
 
 
@@ -537,9 +627,8 @@ def specialness_score(item):
 def add_family_fit(item):
     age_score = age_match_score(item)
     special_score = specialness_score(item)
-    near_score = proximity_score(item.get("city"))
+    near_score = proximity_score(item)
     source_score = evidence_score(item)
-
     total = round(
         age_score * 0.35
         + special_score * 0.35
@@ -563,7 +652,19 @@ def add_family_fit(item):
     }
     reasons.append(level_labels.get(item.get("specialness_level"), "Oplevelsesværdi vurderet"))
 
-    if near_score >= 90:
+    minutes = item.get("travel_minutes")
+    if item.get("travel_requires_ferry"):
+        reasons.append("Færge gør turen markant mindre egnet som spontan udflugt")
+    elif minutes is not None:
+        if minutes <= 35:
+            reasons.append(f"Ca. {minutes} min. kørsel fra Silkeborg")
+        elif minutes <= 80:
+            reasons.append(f"Ca. {minutes} min. kørsel – realistisk dagstur")
+        elif minutes <= 120:
+            reasons.append(f"Ca. {minutes} min. kørsel hver vej")
+        else:
+            reasons.append(f"Ca. {minutes} min. rejse hver vej trækker tydeligt ned")
+    elif near_score >= 90:
         reasons.append("Meget tæt på Silkeborg")
     elif near_score >= 75:
         reasons.append("Rimelig dagstursafstand fra Silkeborg")
@@ -577,6 +678,9 @@ def add_family_fit(item):
         "specialness": special_score,
         "proximity": near_score,
         "evidence": source_score,
+        "travel_minutes": minutes,
+        "travel_distance_km": item.get("travel_distance_km"),
+        "travel_requires_ferry": bool(item.get("travel_requires_ferry")),
         "explanation": reasons,
     }
     return enriched
@@ -586,8 +690,7 @@ def cluster_key(item):
     name = normalize_key_text(item.get("cluster_name"))
     if not name:
         return None
-    city = normalize_key_text(item.get("city"))
-    return (name, city)
+    return (name, normalize_key_text(item.get("city")))
 
 
 def earliest_start(items):
@@ -626,7 +729,6 @@ def cluster_results(results):
         if len(items) == 1:
             clustered.append(items[0])
             continue
-
         items = sorted(
             items,
             key=lambda value: (
@@ -666,7 +768,10 @@ def cluster_results(results):
 
 
 def postprocess_results(results):
-    normalized = [normalize_age_evidence(item) for item in results]
+    normalized = [
+        normalize_travel_evidence(normalize_age_evidence(item))
+        for item in results
+    ]
     deduped = dedupe_results(normalized)
     rejected = []
     eligible = []
@@ -839,16 +944,37 @@ def build_payload(start_date, end_date, provider_result=None):
     }
 
 
+def run_self_test():
+    incompatible = {
+        "age_source": "verified",
+        "age_min": 14,
+        "age_max": None,
+    }
+    assert age_filter_reason(incompatible) is not None
+
+    assert proximity_score(
+        {"city": "Silkeborg", "travel_minutes": 12, "travel_requires_ferry": False}
+    ) == 100
+    assert proximity_score(
+        {"city": "Jyderup", "travel_minutes": 165, "travel_requires_ferry": False}
+    ) == 32
+    assert proximity_score(
+        {"city": "Samsø", "travel_minutes": 170, "travel_requires_ferry": True}
+    ) == 15
+    assert fallback_proximity("Samsø") == 12
+    assert fallback_proximity("Jyderup") == 28
+
+    print("SELF-TEST OK")
+    print("age filter: verified 14+ candidate rejected")
+    print("travel: Silkeborg=100, Jyderup=32, Samsø ferry=15")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="POC collector for family experience discovery."
     )
-    parser.add_argument(
-        "--from", dest="start_date", type=parse_date, required=True, help="Startdato YYYY-MM-DD"
-    )
-    parser.add_argument(
-        "--to", dest="end_date", type=parse_date, required=True, help="Slutdato YYYY-MM-DD"
-    )
+    parser.add_argument("--from", dest="start_date", type=parse_date, help="Startdato YYYY-MM-DD")
+    parser.add_argument("--to", dest="end_date", type=parse_date, help="Slutdato YYYY-MM-DD")
     parser.add_argument(
         "--provider",
         choices=("contract", "openai"),
@@ -860,8 +986,19 @@ def main():
         action="store_true",
         help="Gem resultatet i data/experiences-poc.json",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Kør deterministiske tests af aldersfilter og travel score",
+    )
     args = parser.parse_args()
 
+    if args.self_test:
+        run_self_test()
+        return 0
+
+    if args.start_date is None or args.end_date is None:
+        parser.error("--from og --to er påkrævet medmindre --self-test bruges")
     if args.end_date < args.start_date:
         parser.error("--to må ikke ligge før --from")
 

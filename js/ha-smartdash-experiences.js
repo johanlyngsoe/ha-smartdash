@@ -154,6 +154,16 @@ window.BeastExperiences = (() => {
     }
   }
 
+  function activateExperiences(button) {
+    document.querySelectorAll("#beastRail [data-section]").forEach((candidate) => {
+      candidate.classList.toggle("is-active", candidate === button);
+    });
+    document.querySelectorAll("#beastContent .beast-section[data-section]").forEach((candidate) => {
+      candidate.classList.toggle("is-active", candidate === sectionEl);
+    });
+    document.dispatchEvent(new CustomEvent("beast:sectionchange", { detail: { section: "experiences" } }));
+  }
+
   function mount() {
     if (document.querySelector('.beast-section[data-section="experiences"]')) return;
     const railPages = document.querySelector("#beastRail .beast-rail-pages");
@@ -190,6 +200,13 @@ window.BeastExperiences = (() => {
     content.appendChild(sectionEl);
     gridEl = sectionEl.querySelector(".beast-experiences-grid");
     metaEl = sectionEl.querySelector(".beast-experiences-meta");
+
+    button.addEventListener("click", () => activateExperiences(button));
+    document.addEventListener("beast:sectionchange", (event) => {
+      const isActive = event.detail?.section === "experiences";
+      button.classList.toggle("is-active", isActive);
+      sectionEl?.classList.toggle("is-active", isActive);
+    });
 
     sectionEl.querySelectorAll("[data-sort]").forEach((tab) => tab.addEventListener("click", () => {
       sortMode = tab.dataset.sort;

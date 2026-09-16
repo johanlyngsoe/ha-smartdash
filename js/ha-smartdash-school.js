@@ -101,7 +101,28 @@ window.BeastSchool = (() => {
       "n/t": "natur/teknologi"
     };
 
-    const key = aliases[normalized] || normalized;
+    const semanticSubjects = [
+      "morgensamling",
+      "kristendomskundskab",
+      "natur/teknologi",
+      "håndværk/design",
+      "billedkunst",
+      "matematik",
+      "historie",
+      "engelsk",
+      "idræt",
+      "musik",
+      "udeskole",
+      "dansk",
+      "uuv",
+      "pbl"
+    ];
+
+    const aliased = aliases[normalized] || normalized;
+    const key = semanticSubjects.find((subject) =>
+      aliased === subject || aliased.startsWith(`${subject} `)
+    ) || aliased;
+
     if (SUBJECT_COLOR_MAP[key]) return SUBJECT_COLOR_MAP[key];
 
     let hash = 0;

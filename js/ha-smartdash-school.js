@@ -24,6 +24,25 @@ window.BeastSchool = (() => {
     "#7656ad", "#308491", "#ae5f35", "#587d46"
   ];
 
+  // Semantic subject colours: related/variant subject names share a stable colour.
+  // Unknown subjects still use the deterministic hash fallback below.
+  const SUBJECT_COLOR_MAP = {
+    dansk: "#b96f87",
+    matematik: "#559daa",
+    engelsk: "#4f8f9d",
+    idræt: "#318b91",
+    historie: "#ae8950",
+    billedkunst: "#78966b",
+    "håndværk/design": "#b16f86",
+    "natur/teknologi": "#78966b",
+    kristendomskundskab: "#bd7956",
+    musik: "#8669b8",
+    morgensamling: "#ae8950",
+    udeskole: "#6f9271",
+    uuv: "#71859b",
+    pbl: "#71859b"
+  };
+
   let containerEl = null;
   let selectedChild = "frederikke";
   let weekOffset = [0, 6].includes(new Date().getDay()) ? 1 : 0;
@@ -68,10 +87,26 @@ window.BeastSchool = (() => {
   }
 
   function subjectColor(subject) {
-    const value = String(subject || "?").toLowerCase();
+    const raw = String(subject || "?");
+    const normalized = normalizedText(raw)
+      .replace(/\\b(?:hold|gruppe)\\s*\\d+\\b/g, "")
+      .replace(/\\s+\\d+$/, "")
+      .trim();
+
+    const aliases = {
+      kristendom: "kristendomskundskab",
+      "håndværk design": "håndværk/design",
+      hds: "håndværk/design",
+      "natur teknologi": "natur/teknologi",
+      "n/t": "natur/teknologi"
+    };
+
+    const key = aliases[normalized] || normalized;
+    if (SUBJECT_COLOR_MAP[key]) return SUBJECT_COLOR_MAP[key];
+
     let hash = 0;
-    for (let index = 0; index < value.length; index += 1) {
-      hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    for (let index = 0; index < key.length; index += 1) {
+      hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
     }
     return SUBJECT_COLORS[hash % SUBJECT_COLORS.length];
   }
@@ -308,11 +343,19 @@ window.BeastSchool = (() => {
         response: t("Svar", "Response")
       }[actionType] || t("Handling", "Action");
 
+      const isPost = item.source === "aula-post";
+      const section = isPost
+        ? t("Opslag", "Post")
+        : t("Besked", "Message");
+      const fallbackTitle = isPost
+        ? t("Aula-opslag", "Aula post")
+        : t("Aula-besked", "Aula message");
+
       return [{
-        section: t("Beskeder", "Messages"),
+        section,
         child: children.length === 1 ? children[0] : null,
         children,
-        title: String(item.title || t("Aula-besked", "Aula message")),
+        title: String(item.title || fallbackTitle),
         detail: String(item.detail || ""),
         badges: [badge],
         manualAction: true,

@@ -204,15 +204,9 @@ window.BeastSchool = (() => {
 
       headings.forEach((heading, index) => {
         const bodyEnd = headings[index + 1]?.start ?? source.length;
-        let body = source.slice(heading.bodyStart, bodyEnd);
-        const bodyText = cleanMarkup(body);
+        const body = source.slice(heading.bodyStart, bodyEnd);
         const key = parsePlanDate(heading.label, days);
         if (!key) return;
-
-        if (/^-\s*$/.test(bodyText) && headings[index + 1]) {
-          const nextBodyEnd = headings[index + 2]?.start ?? source.length;
-          body = source.slice(headings[index + 1].bodyStart, nextBodyEnd);
-        }
 
         const text = cleanMarkup(body)
           .replace(/^[-–]\s*/, "")

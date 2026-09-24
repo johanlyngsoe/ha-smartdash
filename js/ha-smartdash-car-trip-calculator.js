@@ -30,12 +30,12 @@
       .beast-car-trip-metric{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-solid)}
       .beast-car-trip-metric small{display:block;color:var(--ink-muted);font-size:.7rem;font-weight:700}
       .beast-car-trip-metric strong{display:block;margin-top:3px;font-size:1.22rem}.beast-car-trip-metric strong span{font-size:.62em;color:var(--ink-muted)}
-      .beast-car-trip-soc{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+      .beast-car-trip-soc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
       .beast-car-trip-soc>div{padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm)}
       .beast-car-trip-soc small{display:block;color:var(--ink-muted);font-size:.7rem}.beast-car-trip-soc strong{display:block;margin-top:2px;font-size:1rem}
       .beast-car-trip-note{margin-top:10px;color:var(--ink-muted);font-size:.74rem;line-height:1.4}
       .beast-car-trip-feasible{margin-top:10px;font-size:.8rem;font-weight:800}.beast-car-trip-feasible.is-ok{color:var(--success)}.beast-car-trip-feasible.is-warn{color:var(--warning)}
-      @media(max-width:700px){.beast-car-trip-form{grid-template-columns:1fr}.beast-car-trip-button{width:100%}.beast-car-trip-metrics{grid-template-columns:1fr 1fr}.beast-car-trip-metric:last-child{grid-column:1/-1}}
+      @media(max-width:700px){.beast-car-trip-form{grid-template-columns:1fr}.beast-car-trip-button{width:100%}.beast-car-trip-metrics,.beast-car-trip-soc{grid-template-columns:1fr 1fr}.beast-car-trip-metric:last-child,.beast-car-trip-soc>div:last-child:nth-child(odd){grid-column:1/-1}}
     `;
     document.head.appendChild(s);
   }
@@ -67,34 +67,47 @@
     const data=await r.json(),x=data?.routes?.[0];if(!x)throw new Error("Ruten kunne ikke beregnes");
     return{km:Number(x.distance)/1000,minutes:Number(x.duration)/60};
   }
+
   async function calculate(){
     const q=state.query.trim();if(!q){state.error="Skriv en destination først.";state.result=null;render();return;}
     const from=coords();if(!from){state.error="Yrsa har ingen GPS-koordinater lige nu.";state.result=null;render();return;}
     state.busy=true;state.error="";state.result=null;render();
     try{
-      const dest=await geocode(q),r=await route(from,dest),mult=state.roundTrip?2:1;
-      const totalKm=r.km*mult,economyKwh=totalKm*ECONOMY_KWH_100/100,safeOneWayKwh=r.km*SAFE_KWH_100/100,safeTotalKwh=totalKm*SAFE_KWH_100/100;
-      const cap=capacity(),soc=currentSoc(),arrival=Number.isFinite(soc)?soc-(safeOneWayKwh/cap*100):NaN,returnSoc=Number.isFinite(soc)?soc-(safeTotalKwh/cap*100):NaN,p=priceData();
-      state.result={label:dest.label,oneWayKm:r.km,totalKm,totalMinutes:r.minutes*mult,economyKwh,cost:p.value===null?null:economyKwh*p.value,price:p.value,priceLabel:p.label,capacity:cap,soc,arrival,returnSoc};
+      const dest=await geocode(q),r=await route(from,dest),cap=capacity(),soc=currentSoc(),p=priceData();
+      state.result={label:dest.label,oneWayKm:r.km,oneWayMinutes:r.minutes,capacity:cap,soc,price:p.value,priceLabel:p.label};
     }catch(e){state.error=e?.message||"Turen kunne ikke beregnes.";}finally{state.busy=false;render();}
+  }
+
+  function derived(x){
+    const mult=state.roundTrip?2:1;
+    const totalKm=x.oneWayKm*mult,totalMinutes=x.oneWayMinutes*mult;
+    const economyKwh=totalKm*ECONOMY_KWH_100/100;
+    const safeOneWayKwh=x.oneWayKm*SAFE_KWH_100/100;
+    const safeTotalKwh=totalKm*SAFE_KWH_100/100;
+    const arrival=Number.isFinite(x.soc)?x.soc-(safeOneWayKwh/x.capacity*100):NaN;
+    const returnSoc=Number.isFinite(x.soc)?x.soc-(safeTotalKwh/x.capacity*100):NaN;
+    const cost=x.price===null?null:economyKwh*x.price;
+    return{totalKm,totalMinutes,economyKwh,safeOneWayKwh,safeTotalKwh,arrival,returnSoc,cost};
   }
 
   function resultMarkup(x){
     if(!x)return"";
-    const cost=x.cost===null?"–":x.cost.toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const d=derived(x);
+    const cost=d.cost===null?"–":d.cost.toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2});
     const price=x.price===null?"–":x.price.toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2});
-    const arrival=Number.isFinite(x.arrival)?Math.round(x.arrival):null,ret=Number.isFinite(x.returnSoc)?Math.round(x.returnSoc):null;
+    const arrival=Number.isFinite(d.arrival)?Math.round(d.arrival):null,ret=Number.isFinite(d.returnSoc)?Math.round(d.returnSoc):null;
     const relevant=state.roundTrip?ret:arrival,ok=relevant!==null&&relevant>=10;
     return `<div class="beast-car-trip-result">
-      <div class="beast-car-trip-destination"><strong>${F.escapeHtml(x.label.split(",").slice(0,2).join(","))}</strong><span>${formatTime(x.totalMinutes)}</span></div>
+      <div class="beast-car-trip-destination"><strong>${F.escapeHtml(x.label.split(",").slice(0,2).join(","))}</strong><span>${formatTime(d.totalMinutes)}</span></div>
       <div class="beast-car-trip-metrics">
-        <div class="beast-car-trip-metric"><small>${state.roundTrip?"Tur/retur":"Afstand"}</small><strong>${x.totalKm.toFixed(0)} <span>km</span></strong></div>
-        <div class="beast-car-trip-metric"><small>Forventet energi</small><strong>${x.economyKwh.toFixed(1)} <span>kWh</span></strong></div>
+        <div class="beast-car-trip-metric"><small>${state.roundTrip?"Tur/retur":"Afstand"}</small><strong>${d.totalKm.toFixed(0)} <span>km</span></strong></div>
+        <div class="beast-car-trip-metric"><small>Forventet energi</small><strong>${d.economyKwh.toFixed(1)} <span>kWh</span></strong></div>
         <div class="beast-car-trip-metric"><small>Estimeret pris</small><strong>${cost} <span>kr</span></strong></div>
       </div>
       <div class="beast-car-trip-soc">
         <div><small>SOC ved mål · med buffer</small><strong>${arrival===null?"–":`${arrival}%`}</strong></div>
-        <div><small>${state.roundTrip?"SOC efter retur · med buffer":"Forbrug til mål · med buffer"}</small><strong>${state.roundTrip?(ret===null?"–":`${ret}%`):`${(x.oneWayKm*SAFE_KWH_100/100).toFixed(1)} kWh`}</strong></div>
+        <div><small>Forbrug til mål · med buffer</small><strong>${d.safeOneWayKwh.toFixed(1)} kWh</strong></div>
+        ${state.roundTrip?`<div><small>SOC efter retur · med buffer</small><strong>${ret===null?"–":`${ret}%`}</strong></div>`:""}
       </div>
       <div class="beast-car-trip-feasible ${ok?"is-ok":"is-warn"}">${relevant===null?"SOC-estimat mangler":(ok?"Kan forventeligt køres uden ladestop":"Planlæg et ladestop")}</div>
       <div class="beast-car-trip-note">Pris: ${price} kr/kWh (${F.escapeHtml(x.priceLabel)}). Forbrug ${ECONOMY_KWH_100.toFixed(1)} kWh/100 km til pris og ${SAFE_KWH_100.toFixed(1)} kWh/100 km til SOC-buffer. Batteriestimat ${x.capacity.toFixed(1)} kWh.</div>

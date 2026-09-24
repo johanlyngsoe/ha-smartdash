@@ -63,6 +63,28 @@ const BeastVirtualKeyboard = (() => {
     ).join("");
   }
 
+  function ensureTargetVisible(target) {
+    if (!root || root.hidden || !target || !document.contains(target)) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!root || root.hidden || !document.contains(target)) return;
+
+        const keyboardTop = root.getBoundingClientRect().top;
+        const targetRect = target.getBoundingClientRect();
+        const margin = 18;
+
+        if (targetRect.bottom <= keyboardTop - margin && targetRect.top >= margin) return;
+
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: targetRect.bottom > keyboardTop - margin ? "center" : "nearest",
+          inline: "nearest"
+        });
+      });
+    });
+  }
+
   function ensureRoot() {
     if (root) return root;
 
@@ -101,6 +123,7 @@ const BeastVirtualKeyboard = (() => {
     activeTarget = target;
     ensureRoot().hidden = false;
     document.documentElement.classList.add("beast-vk-open");
+    ensureTargetVisible(target);
   }
 
   function hide() {

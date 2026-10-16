@@ -1,8 +1,8 @@
 (function(){
   const F=window.BeastCarFleet;if(!F)return;
-  const ECONOMY_KWH_100=18.5;
-  const SAFE_KWH_100=20.4;
-  const FALLBACK_CAPACITY_KWH=73.5;
+  const FALLBACK_ECONOMY_KWH_100=19.81;
+  const FALLBACK_SAFE_KWH_100=21.79;
+  const FALLBACK_CAPACITY_KWH=72.4;
   const state={query:"",roundTrip:false,busy:false,error:"",result:null};
   let wired=false;
 
@@ -51,6 +51,14 @@
     if(current>0)return{value:current,label:"aktuel hjemmepris"};
     return{value:null,label:"pris mangler"};
   }
+  function consumptionData(){
+    const learned=n("sensor.yrsa_forbrug_estimat",0);
+    const safe=n("sensor.yrsa_forbrug_med_buffer",0);
+    const economy=learned>=15&&learned<=35?learned:FALLBACK_ECONOMY_KWH_100;
+    const buffered=safe>=15&&safe<=40?safe:Math.max(economy*1.10,FALLBACK_SAFE_KWH_100);
+    const source=learned>=15&&learned<=35?"lært fra Yrsas kørsel":"historisk baseline";
+    return{economy,safe:buffered,label:source};
+  }
   function capacity(){const v=n("input_number.yrsa_estimated_battery_capacity",0);return v>=55&&v<=100?v:FALLBACK_CAPACITY_KWH;}
   function currentSoc(){return n("sensor.yrsa_battery_level",NaN);}
 
@@ -73,17 +81,17 @@
     const from=coords();if(!from){state.error="Yrsa har ingen GPS-koordinater lige nu.";state.result=null;render();return;}
     state.busy=true;state.error="";state.result=null;render();
     try{
-      const dest=await geocode(q),r=await route(from,dest),cap=capacity(),soc=currentSoc(),p=priceData();
-      state.result={label:dest.label,oneWayKm:r.km,oneWayMinutes:r.minutes,capacity:cap,soc,price:p.value,priceLabel:p.label};
+      const dest=await geocode(q),r=await route(from,dest),cap=capacity(),soc=currentSoc(),p=priceData(),c=consumptionData();
+      state.result={label:dest.label,oneWayKm:r.km,oneWayMinutes:r.minutes,capacity:cap,soc,price:p.value,priceLabel:p.label,economyKwh100:c.economy,safeKwh100:c.safe,consumptionLabel:c.label};
     }catch(e){state.error=e?.message||"Turen kunne ikke beregnes.";}finally{state.busy=false;render();}
   }
 
   function derived(x){
     const mult=state.roundTrip?2:1;
     const totalKm=x.oneWayKm*mult,totalMinutes=x.oneWayMinutes*mult;
-    const economyKwh=totalKm*ECONOMY_KWH_100/100;
-    const safeOneWayKwh=x.oneWayKm*SAFE_KWH_100/100;
-    const safeTotalKwh=totalKm*SAFE_KWH_100/100;
+    const economyKwh=totalKm*x.economyKwh100/100;
+    const safeOneWayKwh=x.oneWayKm*x.safeKwh100/100;
+    const safeTotalKwh=totalKm*x.safeKwh100/100;
     const arrival=Number.isFinite(x.soc)?x.soc-(safeOneWayKwh/x.capacity*100):NaN;
     const returnSoc=Number.isFinite(x.soc)?x.soc-(safeTotalKwh/x.capacity*100):NaN;
     const cost=x.price===null?null:economyKwh*x.price;
@@ -110,7 +118,7 @@
         ${state.roundTrip?`<div><small>SOC efter retur · med buffer</small><strong>${ret===null?"–":`${ret}%`}</strong></div>`:""}
       </div>
       <div class="beast-car-trip-feasible ${ok?"is-ok":"is-warn"}">${relevant===null?"SOC-estimat mangler":(ok?"Kan forventeligt køres uden ladestop":"Planlæg et ladestop")}</div>
-      <div class="beast-car-trip-note">Pris: ${price} kr/kWh (${F.escapeHtml(x.priceLabel)}). Forbrug ${ECONOMY_KWH_100.toFixed(1)} kWh/100 km til pris og ${SAFE_KWH_100.toFixed(1)} kWh/100 km til SOC-buffer. Batteriestimat ${x.capacity.toFixed(1)} kWh.</div>
+      <div class="beast-car-trip-note">Pris: ${price} kr/kWh (${F.escapeHtml(x.priceLabel)}). Forbrug ${x.economyKwh100.toFixed(1)} kWh/100 km (${F.escapeHtml(x.consumptionLabel)}) og ${x.safeKwh100.toFixed(1)} kWh/100 km med 10% SOC-buffer. Batteriestimat ${x.capacity.toFixed(1)} kWh.</div>
     </div>`;
   }
 
@@ -142,7 +150,7 @@
   }
 
   function apply(){
-    if(!wired){wired=true;const i=F.ids();F.watch(apply,[i.location,"sensor.yrsa_battery_level","input_number.yrsa_estimated_battery_capacity","input_number.yrsa_last_charge_average_price","sensor.stromligning_current_price_vat"]);}
+    if(!wired){wired=true;const i=F.ids();F.watch(apply,[i.location,"sensor.yrsa_battery_level","input_number.yrsa_estimated_battery_capacity","input_number.yrsa_last_charge_average_price","sensor.stromligning_current_price_vat","sensor.yrsa_forbrug_estimat","sensor.yrsa_forbrug_med_buffer"]);}
     const shell=document.querySelector(".beast-car-v3-shell");if(!shell)return;
     if(!shell.querySelector("[data-car-trip='1']"))render();
   }

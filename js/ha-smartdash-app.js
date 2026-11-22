@@ -834,7 +834,7 @@ async function checkForDashboardUpdate() {
     // skipAutoInstall means this exact build is one we (or a rollback)
     // previously moved away from -- still shown/installable via the manual
     // "Opdater nu" button above, just not silently reinstalled while idle.
-    if (pendingUpdateVersion && !pendingUpdateContainerManaged && !skippedUpdateVersion() && !data.skipAutoInstall && Date.now() - lastUserActivityAt > UPDATE_IDLE_AUTOAPPLY_MS) {
+    if (false && pendingUpdateVersion && !pendingUpdateContainerManaged && !skippedUpdateVersion() && !data.skipAutoInstall && Date.now() - lastUserActivityAt > UPDATE_IDLE_AUTOAPPLY_MS) {
       installPendingUpdate(updateBannerEl);
     }
   } catch (error) {

@@ -378,6 +378,14 @@ if ($action === "check") {
 }
 
 if ($action === "install") {
+  // Local safety lock: updates are managed separately.
+  http_response_code(409);
+  echo json_encode([
+    "error" => "manual_update_disabled",
+    "message" => "SmartDash updates are managed separately."
+  ]);
+  exit;
+
   // Container images are immutable release artifacts. Replacing files in a
   // running container would disappear on restart and bypass the platform's
   // rollback mechanism, so Docker, Unraid or Home Assistant must replace the

@@ -1058,7 +1058,6 @@
         </div>
         ${activeValues.length ? buildPriceChart(activePrices, priceView === todayKey) : `<p class="beast-music-empty">Ingen prisdata for den valgte dag.</p>`}
       </div>
-      ${renderEloverblikDay()}
       <div class="beast-energy-chart-wrap beast-energy-chart-usage">
         <div class="beast-energy-chart-head">
           ${usageChartToggleMarkup()}
@@ -1067,7 +1066,8 @@
             ${historyAvg !== null ? `<span>Snit <strong>${historyAvg.toFixed(2)} kW</strong></span><span>Top <strong>${historyMax.toFixed(2)} kW</strong></span><span>Bund <strong>${historyMin.toFixed(2)} kW</strong></span>` : ""}
           </div>
         </div>
-        ${cachedHistoryPoints.length ? buildUsageChart(cachedHistoryPoints) : (POWER_ENTITY_ID() ? '<p class="beast-music-empty">Ingen forbrugshistorik tilgængelig endnu.</p>' : '<p class="beast-music-empty">Ingen live-hovedmåler konfigureret. Historisk døgnforbrug vises ovenfor.</p>')}
+        ${cachedHistoryPoints.length ? buildUsageChart(cachedHistoryPoints) : (POWER_ENTITY_ID() ? '<p class="beast-music-empty">Ingen forbrugshistorik tilgængelig endnu.</p>' : '<p class="beast-music-empty">Ingen live-hovedmåler konfigureret. Historisk døgnforbrug vises nedenfor.</p>')}
+        ${renderEloverblikDay()}
       </div>
     `;
     wireEnergyLayout();

@@ -12,6 +12,7 @@ const resolvedSrc = useSub && !source.endsWith("_sub") ? `${source}_sub` : sourc
 const poster = document.getElementById("poster");
 poster.style.objectFit = fit;
 let connected = false;
+let wanted = true;
 let streamReady = false;
 let audioMuted = true;
 let heartbeatTimer = null;
@@ -107,7 +108,7 @@ function refreshPoster() {
 }
 
 function connect() {
-  if (!resolvedSrc || connected || document.hidden) return;
+  if (!wanted || !resolvedSrc || connected || document.hidden) return;
   connected = true;
   streamReady = false;
   document.body.classList.remove("ready");
@@ -131,8 +132,19 @@ function disconnect() {
   postHealth("paused");
 }
 
+function pause() {
+  wanted = false;
+  if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null; }
+  disconnect();
+}
+
+function resume() {
+  wanted = true;
+  connect();
+}
+
 function reconnect() {
-  if (reconnectTimer || document.hidden) return;
+  if (!wanted || reconnectTimer || document.hidden) return;
   disconnect();
   const delay = Math.min(2500, 180 + reconnectAttempts * 320);
   reconnectAttempts += 1;
@@ -159,8 +171,8 @@ function shouldStartImmediately() {
 
 window.addEventListener("message", (event) => {
   if (event.origin !== window.location.origin) return;
-  if (event.data?.type === "camera-player-pause") disconnect();
-  if (event.data?.type === "camera-player-resume") connect();
+  if (event.data?.type === "camera-player-pause") pause();
+  if (event.data?.type === "camera-player-resume") resume();
   if (event.data?.type === "camera-player-reconnect") reconnect();
   if (allowAudio && event.data?.type === "camera-player-audio") {
     audioMuted = event.data.muted !== false;
@@ -169,7 +181,7 @@ window.addEventListener("message", (event) => {
 });
 document.addEventListener("visibilitychange", () => document.hidden ? disconnect() : connect());
 window.addEventListener("online", reconnect);
-window.addEventListener("pagehide", disconnect);
+window.addEventListener("pagehide", pause);
 
 async function initPlayer() {
   // Every caller that already knows the go2rtc address (see
@@ -213,7 +225,7 @@ async function initPlayer() {
     }
   }, 5000);
   if (shouldStartImmediately()) connect();
-  else postHealth("paused");
+  else { wanted = false; postHealth("paused"); }
 }
 
 initPlayer();

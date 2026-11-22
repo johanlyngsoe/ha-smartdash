@@ -265,6 +265,16 @@ if (!is_array($body)) { http_response_code(400); echo json_encode(["error" => "i
 $action = $body["action"] ?? "";
 
 if ($action === "check") {
+  // This installation is maintained from its own Git branch, not upstream releases.
+  // Keep the endpoint compatible with the Administration UI without contacting GitHub.
+  echo json_encode([
+    "currentVersion" => $current,
+    "updateAvailable" => false,
+    "containerManaged" => true,
+    "updatesManagedExternally" => true
+  ]);
+  exit;
+
   $containerManaged = getenv("SMARTDASH_CONTAINER") === "1";
   // "beta" opts into GitHub releases marked pre-release; anything else
   // (including a missing/unrecognized value) is "stable" -- the exact

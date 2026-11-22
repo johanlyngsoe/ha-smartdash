@@ -1038,7 +1038,7 @@
         ${BeastCore.statTile({ icon: "bolt", label: "Forbrug nu", value: `${powerKw}<small>kW</small>`, meta: loadLabel })}
         ${BeastCore.statTile({ icon: "bolt", label: "Elpris nu", value: price !== null ? `${price.toFixed(2)}<small>kr/kWh</small>` : "–", meta: price !== null ? `${currentLevel.label}${priceDifference !== null ? ` · ${Math.abs(priceDifference).toFixed(0)}% ${priceDifference <= 0 ? "under" : "over"} snit` : ""}` : "" })}
         ${BeastCore.statTile({ icon: "grid", label: "Forbrug i dag", value: todayEnergyKwh !== null ? `${todayEnergyKwh.toFixed(1)}<small>kWh</small>` : "–", meta: todayAveragePower !== null ? `Gennemsnit ${todayAveragePower.toFixed(2)} kW` : "" })}
-        ${BeastCore.statTile({ icon: "grid", label: "Pris i dag", value: todayCostKr !== null ? `${todayCostKr.toFixed(0)}<small>kr</small>` : "–", meta: todayAveragePrice !== null ? `Effektiv pris ${todayAveragePrice.toFixed(2)} kr/kWh` : "" })}
+        ${BeastCore.statTile({ icon: "grid", label: todayCostKr !== null ? "Pris i dag" : "Seneste døgns eludgift", value: todayCostKr !== null ? `${todayCostKr.toLocaleString("da-DK", { maximumFractionDigits: 2 })}<small>kr</small>` : historicalCost.status === "ready" && historicalCost.date === eloverblikDay()?.date ? `${historicalCost.total.toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}<small>kr</small>` : "–", meta: todayCostKr !== null ? (todayAveragePrice !== null ? `Effektiv pris ${todayAveragePrice.toFixed(2)} kr/kWh` : "") : historicalCost.status === "ready" && historicalCost.date === eloverblikDay()?.date ? `ElOverblik ${new Date(historicalCost.date + "T12:00:00").toLocaleDateString("da-DK", { day: "numeric", month: "short" })} · estimeret` : "Afventer historiske måler- og prisdata" })}
       </div>
       <div class="beast-energy-chart-wrap beast-energy-chart-price">
         <div class="beast-energy-chart-head">
@@ -1185,7 +1185,12 @@
     // SVG coordinates avoid percentage-height flex children collapsing under dashboard CSS.
     const bars = day.hourly.map((value, hour) => {
       const height = value === null ? 0 : Math.max(2, value / maximum * 125);
-      const label = value === null ? "Ingen data" : value.toFixed(2) + " kWh";
+      const price = historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.hourly[hour] : null;
+      const label = value === null ? "Ingen forbrugsdata" : [
+        `Forbrug: ${value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh`,
+        price !== null ? `Elpris: ${price.toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr/kWh` : "Elpris: afventer historik",
+        price !== null ? `Beregnet udgift: ${(value * price).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr` : "Udgift: afventer historik"
+      ].join(" · ");
       const x = hour * 25 + 4;
       return `<rect x="${x}" y="${130 - height}" width="17" height="${height}" rx="2" fill="var(--beast-accent, #4a8ed0)" opacity="${value === null ? 0.15 : 0.9}"><title>${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}</title></rect>`;
     }).join("");

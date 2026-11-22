@@ -1097,7 +1097,8 @@
     const states = all instanceof Map ? [...all.values()] : Object.values(all || {});
     const hourly = Array(24).fill(null);
     states.forEach((state) => {
-      const match = /^ElOverblik Energy (\d{1,2})-(\d{1,2})$/.exec(String(state?.attributes?.friendly_name || ""));
+      // Match stable Home Assistant entity IDs, not editable friendly names.
+      const match = /^sensor\.eloverblik_energy_(\d{1,2})_(\d{1,2})$/.exec(String(state?.entity_id || ""));
       if (!match) return;
       const hour = Number(match[1]);
       if (hour < 0 || hour > 23 || Number(match[2]) !== hour + 1) return;

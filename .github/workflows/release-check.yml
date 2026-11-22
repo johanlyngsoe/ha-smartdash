@@ -1,4 +1,4 @@
-name: Release checks
+name: SmartDash code checks
 
 on:
   push:
@@ -18,7 +18,17 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-      - name: Validate release
-        run: sh ./scripts/check-release.sh
-      - name: Validate container packages
-        run: sh ./scripts/check-container.sh
+      - name: Check JavaScript syntax
+        run: find js admin -type f -name '*.js' -exec node --check {} +
+      - name: Check PHP syntax
+        run: find api -type f -name '*.php' -exec php -l {} +
+      - name: Check JSON syntax
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for folder in ('data',):
+              for file in Path(folder).rglob('*.json'):
+                  json.loads(file.read_text(encoding='utf-8'))
+                  print(f'Valid JSON: {file}')
+          PY

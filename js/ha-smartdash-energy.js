@@ -1113,16 +1113,18 @@
     if (!day) return "";
     const date = new Date(day.date + "T12:00:00").toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const maximum = Math.max(0.1, ...day.hourly.filter((value) => value !== null));
+    // SVG coordinates avoid percentage-height flex children collapsing under dashboard CSS.
     const bars = day.hourly.map((value, hour) => {
-      const height = value === null ? 0 : Math.max(2, value / maximum * 100);
+      const height = value === null ? 0 : Math.max(2, value / maximum * 125);
       const label = value === null ? "Ingen data" : value.toFixed(2) + " kWh";
-      return `<div title="${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}" style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end"><div style="height:${height}%;background:var(--beast-accent, #4a8ed0);border-radius:3px 3px 0 0;opacity:${value === null ? 0.15 : 0.9}"></div></div>`;
+      const x = hour * 25 + 4;
+      return `<rect x="${x}" y="${130 - height}" width="17" height="${height}" rx="2" fill="var(--beast-accent, #4a8ed0)" opacity="${value === null ? 0.15 : 0.9}"><title>${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}</title></rect>`;
     }).join("");
     return `<div class="beast-energy-chart-wrap" aria-label="Seneste registrerede døgnforbrug">
       <div class="beast-energy-chart-head"><span class="beast-panel-title">Seneste registrerede døgn · ${escapeHtml(date)}</span></div>
       <div style="padding:12px 16px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
       <p style="margin:4px 0 14px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
-      <div style="display:flex;align-items:end;gap:3px;height:145px;border-bottom:1px solid currentColor">${bars}</div>
+      <svg viewBox="0 0 600 135" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:145px;overflow:visible;border-bottom:1px solid currentColor">${bars}</svg>
       <div style="display:flex;justify-content:space-between;opacity:.65;font-size:.8em"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div></div>`;
   }
 

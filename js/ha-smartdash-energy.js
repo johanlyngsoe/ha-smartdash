@@ -907,7 +907,7 @@
         ${BeastCore.statTile({ icon: "bolt", label: "Højeste i dag", value: stats ? `${formatUtilityValue(stats.max, def.rateUnit)}<small>${def.rateUnit}</small>` : "–", meta: stats ? "Målt siden midnat" : "" })}
         ${BeastCore.statTile({ icon: "grid", label: "Laveste i dag", value: stats ? `${formatUtilityValue(stats.min, def.rateUnit)}<small>${def.rateUnit}</small>` : "–", meta: stats ? "Målt siden midnat" : "" })}
       </div>
-      ${renderEloverblikDay()}\n      <div class="beast-energy-chart-wrap beast-energy-chart-usage">
+      <div class="beast-energy-chart-wrap beast-energy-chart-usage">
         <div class="beast-energy-chart-head">
           <button type="button" class="beast-energy-utility-edit${utilityEditing ? " is-active" : ""}" data-utility-edit aria-pressed="${utilityEditing}" title="${utilityEditing ? "Luk redigering" : "Rediger graf"}">${BeastCore.icon("settings", { size: 16 })}</button>
           ${BeastCore.chartTypeToggleMarkup(def.chartKey, "")}
@@ -1058,6 +1058,7 @@
         </div>
         ${activeValues.length ? buildPriceChart(activePrices, priceView === todayKey) : `<p class="beast-music-empty">Ingen prisdata for den valgte dag.</p>`}
       </div>
+      ${renderEloverblikDay()}
       <div class="beast-energy-chart-wrap beast-energy-chart-usage">
         <div class="beast-energy-chart-head">
           ${usageChartToggleMarkup()}
@@ -1066,7 +1067,7 @@
             ${historyAvg !== null ? `<span>Snit <strong>${historyAvg.toFixed(2)} kW</strong></span><span>Top <strong>${historyMax.toFixed(2)} kW</strong></span><span>Bund <strong>${historyMin.toFixed(2)} kW</strong></span>` : ""}
           </div>
         </div>
-        ${cachedHistoryPoints.length ? buildUsageChart(cachedHistoryPoints) : '<p class="beast-music-empty">Henter historik…</p>'}
+        ${cachedHistoryPoints.length ? buildUsageChart(cachedHistoryPoints) : (POWER_ENTITY_ID() ? '<p class="beast-music-empty">Ingen forbrugshistorik tilgængelig endnu.</p>' : '<p class="beast-music-empty">Ingen live-hovedmåler konfigureret. Historisk døgnforbrug vises ovenfor.</p>')}
       </div>
     `;
     wireEnergyLayout();

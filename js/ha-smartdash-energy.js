@@ -1092,12 +1092,12 @@
     const total = BeastHaSocket.getState("sensor.eloverblik_energy_total");
     const date = total?.attributes?.metering_date || total?.attributes?.["Metering date"];
     const value = Number(total?.state);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date || "")) || !Number.isFinite(value) || value < 0) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !Number.isFinite(value) || value < 0) return null;
     const all = BeastHaSocket.getAllStates();
     const states = all instanceof Map ? [...all.values()] : Object.values(all || {});
     const hourly = Array(24).fill(null);
     states.forEach((state) => {
-      const match = /^ElOverblik Energy (\\d{1,2})-(\\d{1,2})$/.exec(String(state?.attributes?.friendly_name || ""));
+      const match = /^ElOverblik Energy (\d{1,2})-(\d{1,2})$/.exec(String(state?.attributes?.friendly_name || ""));
       if (!match) return;
       const hour = Number(match[1]);
       if (hour < 0 || hour > 23 || Number(match[2]) !== hour + 1) return;

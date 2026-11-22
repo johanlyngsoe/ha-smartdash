@@ -87,7 +87,18 @@
     const matches = [...go2rtcStreamGroups.entries()].filter(([group]) =>
       group === suffix || group.startsWith(suffix + "_")
     );
-    return matches.length === 1 ? matches[0][1] : [];
+    if (matches.length === 1) return matches[0][1];
+    // Numbered go2rtc streams conventionally use _1 for main and _2 for sub.
+    // Only infer that pair when no other stream with the same suffix exists.
+    if (matches.length === 2 &&
+        matches.some(([group]) => group === suffix + "_1") &&
+        matches.some(([group]) => group === suffix + "_2")) {
+      return [
+        { ...matches.find(([group]) => group === suffix + "_1")[1][0], quality: "high" },
+        { ...matches.find(([group]) => group === suffix + "_2")[1][0], quality: "low" }
+      ];
+    }
+    return [];
   }
 
   function reconcileSavedCameraQualities() {

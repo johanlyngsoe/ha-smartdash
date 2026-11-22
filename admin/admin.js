@@ -1250,43 +1250,35 @@
     </section>`;
   }
 
+  // This privately maintained dashboard is deployed from Git on TrueNAS.
+  // The admin page is informational; upstream release installation is disabled.
   function renderUpdatesView() {
-    const currentUpdateChannel = BeastConfig.get("updateChannel") === "beta" ? "beta" : "stable";
     return `<section class="admin-view${activeView === "updates" ? " is-active" : ""}" data-admin-view="updates">
-      <div class="admin-card"><div class="admin-card-head"><div><h2>${t("Denne installation", "This installation")}</h2><p>${t("Versionen der kører lige nu, og hvad der senest er ændret.", "The version currently running and its latest changes.")}</p></div><div style="display:flex; align-items:center; gap:10px;"><div class="admin-channel-switch" role="group" aria-label="${t("Opdateringskanal", "Update channel")}"><button type="button" class="admin-channel-btn${currentUpdateChannel === "stable" ? " is-active" : ""}" data-update-channel="stable">Stable</button><button type="button" class="admin-channel-btn${currentUpdateChannel === "beta" ? " is-active" : ""}" data-update-channel="beta">Beta</button></div><button type="button" class="beast-btn" data-check-updates>${t("Tjek for opdateringer", "Check for updates")}</button></div></div>
-        <div class="beast-stat-grid">${BeastCore.statTile({ icon: "sparkles", label: t("Nuværende version", "Current version"), value: t("Henter…", "Loading…"), meta: "…", id: "adminCurrentVersionTile" })}</div>
-        <div class="admin-update-status" id="adminUpdateStatus" data-state="checking"><span class="admin-update-status-dot"></span><span id="adminUpdateStatusText">${t("Tjekker…", "Checking…")}</span></div>
-        ${currentUpdateChannel === "beta" ? `<p class="admin-field-hint" style="margin:8px 0 0;">${t("Du følger Beta-kanalen — kan indeholde ændringer der endnu ikke er færdigtestede.", "You're following the Beta channel -- may include changes that haven't finished testing yet.")}</p>` : ""}
-        <div id="adminInstallLatest" class="admin-install-latest-slot"><p class="admin-empty">${t("Henter…", "Loading…")}</p></div>
-        <div id="adminUpdateSkipNote"></div>
-        <details class="admin-changelog-details">
-          <summary>${t("Vis ændringer og release notes", "Show changes and release notes")}</summary>
-          <div class="admin-changelog-list" id="adminChangelogList"><p class="admin-empty">${t("Henter ændringslog…", "Loading changelog…")}</p></div>
-        </details>
-      </div>
-      <div class="admin-card"><div class="admin-card-head"><div><h2>${t("Versionshistorik", "Version history")}</h2><p>${t("Du kan altid installere den nyeste version, eller vælge en ældre at gendanne. Den nuværende version gemmes altid først, så det kan fortrydes.", "You can always install the latest version or restore an older one. The current version is saved first so the change can be undone.")}</p></div><button type="button" class="beast-btn" data-reload-versions>${t("Opdatér liste", "Refresh list")}</button></div>
-        <div id="adminVersionSection">
-          <div class="admin-old-versions">
-            <span class="admin-field-label">${t("Tidligere versioner", "Previous versions")}</span>
-            <div class="admin-old-versions-row">
-              <select id="adminOldVersionSelect" disabled><option value="">${t("Henter…", "Loading…")}</option></select>
-              <button type="button" class="beast-btn" id="adminOldVersionRestoreBtn" data-rollback-version="" data-is-newer="false" data-is-latest="false" disabled>${t("Gendan valgte version", "Restore selected version")}</button>
-            </div>
-          </div>
-          <div class="admin-old-versions admin-manual-install">
-            <span class="admin-field-label">${t("Installer bestemt version fra GitHub", "Install a specific version from GitHub")}</span>
-            <p class="admin-field-hint">${t("Til hvis auto-tjek ikke virker, eller du vil have en bestemt version. Indsæt et GitHub release-link eller bare versionsnummeret, fx v0.5.9.", "For when auto-check isn't working, or you want a specific version. Paste a GitHub release link or just the version number, e.g. v0.5.9.")}</p>
-            <div class="admin-old-versions-row">
-              <input type="text" id="adminManualTagInput" placeholder="v0.5.9 eller https://github.com/${escapeHtml(GITHUB_REPO)}/releases/tag/v0.5.9">
-              <button type="button" class="beast-btn" id="adminManualInstallBtn" data-rollback-version="" data-install-source="github" data-install-tag="" data-is-newer="false" data-is-latest="false" disabled>${t("Installer denne version", "Install this version")}</button>
-            </div>
-            <span class="admin-save-state" id="adminManualTagState"></span>
-          </div>
-        </div>
-        <div class="admin-progress-track" id="adminRollbackProgress" hidden><div class="admin-progress-fill" id="adminRollbackProgressFill"></div></div>
-        <div class="admin-save-state" id="adminRollbackState"></div>
+      <div class="admin-card">
+        <div class="admin-card-head"><div><h2>${t("Denne installation", "This installation")}</h2><p>${t("SmartDash vedligeholdes via GitHub og TrueNAS.", "SmartDash is maintained through GitHub and TrueNAS.")}</p></div></div>
+        <div class="beast-stat-grid">${BeastCore.statTile({ icon: "sparkles", label: t("Nuværende version", "Current version"), value: t("Henter…", "Loading…"), meta: "", id: "adminCurrentVersionTile" })}</div>
+        <div class="admin-update-status" id="adminUpdateStatus" data-state="current"><span class="admin-update-status-dot"></span><span id="adminUpdateStatusText">${t("Opdateringer installeres manuelt via Git og TrueNAS. Automatisk opdatering er slået fra.", "Updates are deployed manually through Git and TrueNAS. Automatic updates are disabled.")}</span></div>
+        <p class="admin-field-hint">${t("GitHub release-kanaler, installation og gendannelse af programversioner er ikke tilgængelige her. Brug Backup & gendannelse til konfigurationsbackup.", "GitHub release channels, installation and program-version rollback are not available here. Use Backup & restore for configuration backups.")}</p>
       </div>
     </section>`;
+  }
+
+  async function loadInstalledVersion() {
+    const tile = document.getElementById("adminCurrentVersionTile");
+    if (!tile) return;
+    const valueEl = tile.querySelector(".beast-stat-tile-value");
+    try {
+      const response = await fetch(localApiUrl("update.php"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check" })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      if (valueEl) valueEl.textContent = formatVersionLabel(payload.currentVersion);
+    } catch (error) {
+      if (valueEl) valueEl.textContent = t("Ukendt", "Unknown");
+    }
   }
 
   function formatVersionLabel(version) {
@@ -1966,7 +1958,7 @@
       BeastLocalSettings.set("language", event.target.value);
     });
     if (activeView === "backup") loadBackupSettings();
-    if (activeView === "updates") loadUpdatesSettings();
+    if (activeView === "updates") loadInstalledVersion();
     if (screensaverPreviewTimerId) { window.clearInterval(screensaverPreviewTimerId); screensaverPreviewTimerId = null; }
     if (activeView === "screensaver") {
       document.querySelectorAll("[data-ambient-preview-picture]").forEach((img) => {

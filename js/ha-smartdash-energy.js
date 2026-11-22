@@ -90,6 +90,8 @@
     const reading = numericState(entityId);
     if (!reading || reading.value < 0) return null;
     const unit = String(reading.state.attributes?.unit_of_measurement || "").toLowerCase();
+    if (kind === "cost" && !["kr", "dkk"].includes(unit)) return null;
+    if (kind === "energy" && !["wh", "kwh", "mwh"].includes(unit)) return null;
     if (kind === "energy") {
       if (unit === "wh") return reading.value / 1000;
       if (unit === "mwh") return reading.value * 1000;
@@ -1200,8 +1202,8 @@
       <p style="margin:4px 0 14px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
       <p style="margin:0 0 14px"><strong>Beregnet eludgift: ${historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.total.toLocaleString("da-DK", { style: "currency", currency: "DKK" }) : "–"}</strong><br>
       <small style="opacity:.75">${historicalCost.date !== day.date || historicalCost.status === "loading" || historicalCost.status === "idle" ? "Henter historiske timepriser…" : historicalCost.status === "ready" ? "Timeforbrug × historisk Strømligning-pris inkl. moms · estimeret udgift" : "Historiske priser eller timeforbrug er ikke komplette – ingen beregning vist"}</small></p>
-      <svg viewBox="0 0 600 135" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:145px;overflow:visible;border-bottom:1px solid currentColor">${bars}</svg>
-      <div style="display:flex;justify-content:space-between;opacity:.65;font-size:.8em"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div></div>`;
+      <svg viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:170px;overflow:visible">${bars}<line x1="0" y1="132" x2="600" y2="132" stroke="currentColor" opacity=".3"/>${[0,6,12,18,24].map(hour => `<text x="${hour === 24 ? 595 : hour * 25}" y="151" text-anchor="${hour === 0 ? "start" : hour === 24 ? "end" : "middle"}" fill="currentColor" opacity=".7" font-size="13">${String(hour).padStart(2,"0")}</text>`).join("")}</svg>
+      </div></div>`;
   }
 
   function refreshTodayTotals() {

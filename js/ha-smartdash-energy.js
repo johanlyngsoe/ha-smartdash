@@ -1074,6 +1074,12 @@
     `;
     wireEnergyLayout();
     wireUtilityTabs();
+    containerEl.querySelectorAll("[data-eloverblik-hour]").forEach((bar) => {
+      const activate = () => { selectedEloverblikHour = Number(bar.dataset.eloverblikHour); render(); };
+      bar.addEventListener("click", activate);
+      bar.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); activate(); } });
+    });
+    containerEl.querySelector("[data-eloverblik-close]")?.addEventListener("click", () => { selectedEloverblikHour = null; render(); });
 
     containerEl.querySelectorAll("[data-view]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1179,6 +1185,8 @@
     await historicalCostRequest;
   }
 
+  let selectedEloverblikHour = null;
+
   function renderEloverblikDay() {
     const day = eloverblikDay();
     if (!day) return "";
@@ -1194,15 +1202,18 @@
         price !== null ? `Beregnet udgift: ${(value * price).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr` : "Udgift: afventer historik"
       ].join(" · ");
       const x = hour * 25 + 4;
-      return `<rect x="${x}" y="${130 - height}" width="17" height="${height}" rx="2" fill="var(--beast-accent, #4a8ed0)" opacity="${value === null ? 0.15 : 0.9}"><title>${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}</title></rect>`;
+      return `<rect data-eloverblik-hour="${hour}" tabindex="0" role="button" aria-label="${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}" x="${x}" y="${130 - height}" width="17" height="${height}" rx="2" fill="var(--beast-accent, #4a8ed0)" opacity="${selectedEloverblikHour === hour ? 1 : value === null ? 0.15 : 0.9}" style="cursor:pointer;${selectedEloverblikHour === hour ? "stroke:var(--beast-text, #243047);stroke-width:2;" : ""}"></rect>`;
     }).join("");
+    const selected = selectedEloverblikHour === null ? null : day.hourly[selectedEloverblikHour];
+    const selectedPrice = selectedEloverblikHour !== null && historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.hourly[selectedEloverblikHour] : null;
+    const detail = selectedEloverblikHour === null ? "" : `<div data-eloverblik-detail style="margin-top:8px;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:rgba(255,255,255,.75);display:flex;justify-content:space-between;gap:12px"><div><strong>${String(selectedEloverblikHour).padStart(2,"0")}:00–${String((selectedEloverblikHour+1)%24).padStart(2,"0")}:00</strong><div style="margin-top:5px;line-height:1.6">Forbrug: <strong>${selected === null ? "Ingen data" : selected.toLocaleString("da-DK",{maximumFractionDigits:2})+" kWh"}</strong><br>Elpris: <strong>${selectedPrice === null ? "Afventer historik" : selectedPrice.toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr/kWh"}</strong><br>Beregnet udgift: <strong>${selected === null || selectedPrice === null ? "–" : (selected*selectedPrice).toLocaleString("da-DK",{minimumFractionDigits:2,maximumFractionDigits:2})+" kr"}</strong></div></div><button type="button" data-eloverblik-close aria-label="Luk timeoplysninger" style="border:0;background:transparent;color:inherit;font-size:24px;cursor:pointer">×</button></div>`;
     return `<div class="beast-energy-chart-wrap" aria-label="Seneste registrerede døgnforbrug" style="padding:10px 12px;overflow:visible;min-height:0;flex:0 0 auto">
       <div class="beast-energy-chart-head"><span class="beast-panel-title">Seneste registrerede døgn · ${escapeHtml(date)}</span></div>
       <div style="padding:6px 8px 4px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
       <p style="margin:3px 0 8px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
       <p style="margin:0 0 8px"><strong>Beregnet eludgift: ${historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.total.toLocaleString("da-DK", { style: "currency", currency: "DKK" }) : "–"}</strong><br>
       <small style="opacity:.75">${historicalCost.date !== day.date || historicalCost.status === "loading" || historicalCost.status === "idle" ? "Henter historiske timepriser…" : historicalCost.status === "ready" ? "Timeforbrug × historisk Strømligning-pris inkl. moms · estimeret udgift" : "Historiske priser eller timeforbrug er ikke komplette – ingen beregning vist"}</small></p>
-      <div style="width:100%;min-width:0;padding-bottom:8px"><svg viewBox="0 0 600 134" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:100px">${bars}<line x1="0" y1="132" x2="600" y2="132" stroke="currentColor" opacity=".3"/></svg><div aria-label="Klokkeslæt" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding-top:6px;color:var(--beast-text-muted, #64748b);font-size:12px;line-height:18px">${[0,6,12,18,24].map(hour => `<span>${String(hour).padStart(2,"0")}</span>`).join("")}</div></div>
+      <div style="width:100%;min-width:0;padding-bottom:8px"><svg viewBox="0 0 600 134" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:100px">${bars}<line x1="0" y1="132" x2="600" y2="132" stroke="currentColor" opacity=".3"/></svg><div aria-label="Klokkeslæt" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding-top:6px;color:var(--beast-text-muted, #64748b);font-size:12px;line-height:18px">${[0,6,12,18,24].map(hour => `<span>${String(hour).padStart(2,"0")}</span>`).join("")}</div>${detail}</div>
       </div></div>`;
   }
 
@@ -1237,6 +1248,12 @@
   function init(root) {
     containerEl = root;
     containerEl.classList.add("beast-energy-panel");
+    document.addEventListener("pointerdown", (event) => {
+      if (selectedEloverblikHour === null || !containerEl?.isConnected) return;
+      if (event.target.closest?.("[data-eloverblik-hour], [data-eloverblik-detail]")) return;
+      selectedEloverblikHour = null;
+      render();
+    });
     containerEl.innerHTML = `<p class="beast-music-empty">Henter…</p>`;
     const stableRender = BeastCore.stableUpdater(containerEl, render, 1200);
 

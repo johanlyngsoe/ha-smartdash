@@ -1196,13 +1196,13 @@
       const x = hour * 25 + 4;
       return `<rect x="${x}" y="${130 - height}" width="17" height="${height}" rx="2" fill="var(--beast-accent, #4a8ed0)" opacity="${value === null ? 0.15 : 0.9}"><title>${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}</title></rect>`;
     }).join("");
-    return `<div class="beast-energy-chart-wrap" aria-label="Seneste registrerede døgnforbrug">
+    return `<div class="beast-energy-chart-wrap" aria-label="Seneste registrerede døgnforbrug" style="padding:10px 12px;overflow:visible;min-height:0;flex:0 0 auto">
       <div class="beast-energy-chart-head"><span class="beast-panel-title">Seneste registrerede døgn · ${escapeHtml(date)}</span></div>
-      <div style="padding:12px 16px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
-      <p style="margin:4px 0 14px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
-      <p style="margin:0 0 14px"><strong>Beregnet eludgift: ${historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.total.toLocaleString("da-DK", { style: "currency", currency: "DKK" }) : "–"}</strong><br>
+      <div style="padding:6px 8px 4px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
+      <p style="margin:3px 0 8px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
+      <p style="margin:0 0 8px"><strong>Beregnet eludgift: ${historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.total.toLocaleString("da-DK", { style: "currency", currency: "DKK" }) : "–"}</strong><br>
       <small style="opacity:.75">${historicalCost.date !== day.date || historicalCost.status === "loading" || historicalCost.status === "idle" ? "Henter historiske timepriser…" : historicalCost.status === "ready" ? "Timeforbrug × historisk Strømligning-pris inkl. moms · estimeret udgift" : "Historiske priser eller timeforbrug er ikke komplette – ingen beregning vist"}</small></p>
-      <div style="width:100%;min-width:0;padding-bottom:8px"><svg viewBox="0 0 600 134" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:128px">${bars}<line x1="0" y1="132" x2="600" y2="132" stroke="currentColor" opacity=".3"/></svg><div aria-label="Klokkeslæt" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding-top:6px;color:var(--beast-text-muted, #64748b);font-size:12px;line-height:18px">${[0,6,12,18,24].map(hour => `<span>${String(hour).padStart(2,"0")}</span>`).join("")}</div></div>
+      <div style="width:100%;min-width:0;padding-bottom:8px"><svg viewBox="0 0 600 134" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:100px">${bars}<line x1="0" y1="132" x2="600" y2="132" stroke="currentColor" opacity=".3"/></svg><div aria-label="Klokkeslæt" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding-top:6px;color:var(--beast-text-muted, #64748b);font-size:12px;line-height:18px">${[0,6,12,18,24].map(hour => `<span>${String(hour).padStart(2,"0")}</span>`).join("")}</div></div>
       </div></div>`;
   }
 

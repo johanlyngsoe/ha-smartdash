@@ -2287,6 +2287,12 @@
     utilityHistoryLoading = true;
     renderEnergy();
     const config = UTILITY_VIEWS[utilityView];
+    if (!config?.history) {
+      utilityHistory = [];
+      utilityHistoryLoading = false;
+      renderEnergy();
+      return;
+    }
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     // 5-minute buckets to match Home Assistant's own history graph

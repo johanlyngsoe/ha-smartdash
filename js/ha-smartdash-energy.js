@@ -907,7 +907,7 @@
         ${BeastCore.statTile({ icon: "bolt", label: "Højeste i dag", value: stats ? `${formatUtilityValue(stats.max, def.rateUnit)}<small>${def.rateUnit}</small>` : "–", meta: stats ? "Målt siden midnat" : "" })}
         ${BeastCore.statTile({ icon: "grid", label: "Laveste i dag", value: stats ? `${formatUtilityValue(stats.min, def.rateUnit)}<small>${def.rateUnit}</small>` : "–", meta: stats ? "Målt siden midnat" : "" })}
       </div>
-      <div class="beast-energy-chart-wrap beast-energy-chart-usage">
+      ${renderEloverblikDay()}\n      <div class="beast-energy-chart-wrap beast-energy-chart-usage">
         <div class="beast-energy-chart-head">
           <button type="button" class="beast-energy-utility-edit${utilityEditing ? " is-active" : ""}" data-utility-edit aria-pressed="${utilityEditing}" title="${utilityEditing ? "Luk redigering" : "Rediger graf"}">${BeastCore.icon("settings", { size: 16 })}</button>
           ${BeastCore.chartTypeToggleMarkup(def.chartKey, "")}
@@ -1083,6 +1083,46 @@
       energyView = button.dataset.energyView;
       render();
     }));
+  }
+
+  // ElOverblik reports delayed metered days, not live or today's usage.
+  // Keep these readings separate from the live/today utility-meter cards.
+  function eloverblikDay() {
+    const total = BeastHaSocket.getState("sensor.eloverblik_energy_total");
+    const date = total?.attributes?.metering_date || total?.attributes?.["Metering date"];
+    const value = Number(total?.state);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(date || "")) || !Number.isFinite(value) || value < 0) return null;
+    const all = BeastHaSocket.getAllStates();
+    const states = all instanceof Map ? [...all.values()] : Object.values(all || {});
+    const hourly = Array(24).fill(null);
+    states.forEach((state) => {
+      const match = /^ElOverblik Energy (\\d{1,2})-(\\d{1,2})$/.exec(String(state?.attributes?.friendly_name || ""));
+      if (!match) return;
+      const hour = Number(match[1]);
+      if (hour < 0 || hour > 23 || Number(match[2]) !== hour + 1) return;
+      const sensorDate = state.attributes?.metering_date || state.attributes?.["Metering date"];
+      const reading = Number(state.state);
+      if (sensorDate === date && Number.isFinite(reading) && reading >= 0) hourly[hour] = reading;
+    });
+    return { date, value, hourly };
+  }
+
+  function renderEloverblikDay() {
+    const day = eloverblikDay();
+    if (!day) return "";
+    const date = new Date(day.date + "T12:00:00").toLocaleDateString("da-DK", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const maximum = Math.max(0.1, ...day.hourly.filter((value) => value !== null));
+    const bars = day.hourly.map((value, hour) => {
+      const height = value === null ? 0 : Math.max(2, value / maximum * 100);
+      const label = value === null ? "Ingen data" : value.toFixed(2) + " kWh";
+      return `<div title="${String(hour).padStart(2, "0")}:00–${String((hour + 1) % 24).padStart(2, "0")}:00 · ${label}" style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end"><div style="height:${height}%;background:var(--beast-accent, #4a8ed0);border-radius:3px 3px 0 0;opacity:${value === null ? 0.15 : 0.9}"></div></div>`;
+    }).join("");
+    return `<div class="beast-energy-chart-wrap" aria-label="Seneste registrerede døgnforbrug">
+      <div class="beast-energy-chart-head"><span class="beast-panel-title">Seneste registrerede døgn · ${escapeHtml(date)}</span></div>
+      <div style="padding:12px 16px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
+      <p style="margin:4px 0 14px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
+      <div style="display:flex;align-items:end;gap:3px;height:145px;border-bottom:1px solid currentColor">${bars}</div>
+      <div style="display:flex;justify-content:space-between;opacity:.65;font-size:.8em"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div></div>`;
   }
 
   function refreshTodayTotals() {

@@ -68,7 +68,26 @@
 
   function go2rtcVariantsForCamera(slug) {
     const key = normalizedStreamKey(slug);
-    return go2rtcStreamGroups.get(key) || go2rtcStreamGroups.get(key.replace(/_camera$/, "")) || [];
+    const aliases = BeastConfig.get("panels.cameras.streamAliases") || {};
+    const alias = aliases[slug] || aliases[key];
+    if (typeof alias === "string" && alias.trim()) {
+      const exact = [...go2rtcStreamGroups.values()].flat().find((variant) => variant.streamName === alias.trim());
+      if (exact) return [exact];
+      const mapped = go2rtcStreamGroups.get(normalizedStreamKey(alias));
+      if (mapped?.length) return mapped;
+    }
+    const direct = go2rtcStreamGroups.get(key) || go2rtcStreamGroups.get(key.replace(/_camera$/, ""));
+    if (direct?.length) return direct;
+
+    // Some HA integrations prefix camera names (e.g. vores_doorbell),
+    // while go2rtc names the stream by device (e.g. doorbell_1).
+    // Only use a suffix match when it identifies exactly one stream group.
+    const suffix = key.split("_").at(-1);
+    if (!suffix || suffix.length < 5) return [];
+    const matches = [...go2rtcStreamGroups.entries()].filter(([group]) =>
+      group === suffix || group.startsWith(suffix + "_")
+    );
+    return matches.length === 1 ? matches[0][1] : [];
   }
 
   function reconcileSavedCameraQualities() {

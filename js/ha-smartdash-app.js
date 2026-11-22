@@ -899,10 +899,8 @@ function runCameraHealthCheck() {
 }
 
 function startKioskWatchdogs() {
-  if (!buildCheckTimerId) {
-    buildCheckTimerId = window.setInterval(checkForDashboardUpdate, BUILD_CHECK_INTERVAL_MS);
-    window.setTimeout(checkForDashboardUpdate, 5000);
-  }
+  // Upstream release polling is disabled for this privately maintained dashboard.
+  // Other kiosk watchdogs continue running as before.
   if (!cameraHealthTimerId) cameraHealthTimerId = window.setInterval(runCameraHealthCheck, CAMERA_HEALTH_CHECK_INTERVAL_MS);
   // An always-on kiosk never gets the fresh start a manual reload gives.
   // Reconciling every individual widget's stale state after a real outage

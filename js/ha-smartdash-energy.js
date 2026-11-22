@@ -1109,6 +1109,74 @@
     return { date, value, hourly };
   }
 
+  // Historical price readings are effective from their HA timestamp until the next change.
+  // Integrate over each local clock hour (including mid-hour corrections), never by row count.
+  const HISTORICAL_PRICE_ID = "sensor.stromligning_current_price_vat";
+  let historicalCost = { date: null, status: "idle", total: null, hourly: [] };
+  let historicalCostRequest = null;
+
+  async function refreshHistoricalCost() {
+    const day = eloverblikDay();
+    if (!day || day.date === historicalCost.date && historicalCost.status !== "error") return;
+    if (historicalCostRequest) return;
+    if (day.hourly.some((v) => v === null)) {
+      historicalCost = { date: day.date, status: "incomplete", total: null, hourly: [] };
+      render();
+      return;
+    }
+    historicalCost = { date: day.date, status: "loading", total: null, hourly: [] };
+    render();
+    historicalCostRequest = (async () => {
+      try {
+        // Explicit Copenhagen time-zone offsets ensure that HA receives the correct
+        // UTC range even when the browser is not running in Denmark.
+        const localStart = new Date(day.date + "T00:00:00");
+        const localEnd = new Date(localStart);
+        localEnd.setDate(localEnd.getDate() + 1);
+        const url = `/api/history/period/${encodeURIComponent(localStart.toISOString())}?filter_entity_id=${encodeURIComponent(HISTORICAL_PRICE_ID)}&end_time=${encodeURIComponent(localEnd.toISOString())}`;
+        const response = await BeastAuth.haFetch(url);
+        const entries = (Array.isArray(response) ? response[0] : []) || [];
+        const readings = entries.map((item) => ({
+          at: new Date(item.last_changed || item.last_updated || item.lc || item.lu).getTime(),
+          price: Number(item.state ?? item.s)
+        })).filter((item) => Number.isFinite(item.at) && Number.isFinite(item.price) && item.price >= 0)
+          .sort((a, b) => a.at - b.at);
+        const hourly = [];
+        for (let hour = 0; hour < 24; hour++) {
+          const from = localStart.getTime() + hour * 3600000;
+          const to = from + 3600000;
+          const active = readings.filter((item) => item.at <= from).at(-1);
+          if (!active) { hourly.push(null); continue; }
+          let price = active.price, cursor = from, weighted = 0;
+          for (const item of readings) {
+            if (item.at <= from) continue;
+            if (item.at >= to) break;
+            weighted += price * (item.at - cursor);
+            price = item.price;
+            cursor = item.at;
+          }
+          weighted += price * (to - cursor);
+          hourly.push(weighted / 3600000);
+        }
+        // Never present a partial calculation as a full day's cost.
+        const complete = hourly.every((p) => p !== null);
+        historicalCost = {
+          date: day.date,
+          status: complete ? "ready" : "incomplete",
+          total: complete ? hourly.reduce((sum, p, i) => sum + p * day.hourly[i], 0) : null,
+          hourly
+        };
+      } catch (error) {
+        BeastCore.log(`Energi: historiske elpriser kunne ikke hentes (${error.message}).`);
+        historicalCost = { date: day.date, status: "error", total: null, hourly: [] };
+      } finally {
+        historicalCostRequest = null;
+        render();
+      }
+    })();
+    await historicalCostRequest;
+  }
+
   function renderEloverblikDay() {
     const day = eloverblikDay();
     if (!day) return "";
@@ -1125,6 +1193,8 @@
       <div class="beast-energy-chart-head"><span class="beast-panel-title">Seneste registrerede døgn · ${escapeHtml(date)}</span></div>
       <div style="padding:12px 16px"><strong style="font-size:1.6em">${day.value.toLocaleString("da-DK", { maximumFractionDigits: 2 })} kWh</strong>
       <p style="margin:4px 0 14px;opacity:.7">ElOverblik · forsinkede målerdata, ikke forbrug i dag</p>
+      <p style="margin:0 0 14px"><strong>Beregnet eludgift: ${historicalCost.date === day.date && historicalCost.status === "ready" ? historicalCost.total.toLocaleString("da-DK", { style: "currency", currency: "DKK" }) : "–"}</strong><br>
+      <small style="opacity:.75">${historicalCost.date !== day.date || historicalCost.status === "loading" || historicalCost.status === "idle" ? "Henter historiske timepriser…" : historicalCost.status === "ready" ? "Timeforbrug × historisk Strømligning-pris inkl. moms · estimeret udgift" : "Historiske priser eller timeforbrug er ikke komplette – ingen beregning vist"}</small></p>
       <svg viewBox="0 0 600 135" preserveAspectRatio="none" role="img" aria-label="Timeforbrug fordelt på 24 timer" style="display:block;width:100%;height:145px;overflow:visible;border-bottom:1px solid currentColor">${bars}</svg>
       <div style="display:flex;justify-content:space-between;opacity:.65;font-size:.8em"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div></div></div>`;
   }
@@ -1154,6 +1224,7 @@
   function refreshTodayData() {
     refreshTodayTotals();
     refreshTodayHistory();
+    refreshHistoricalCost();
   }
 
   function init(root) {

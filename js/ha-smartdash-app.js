@@ -128,6 +128,7 @@ function setKioskScreenPower(on) {
   if (!entityId || !BeastAuth?.haFetch) return;
 
   kioskScreenIsOff = !on;
+  syncCameraPlayers();
 
   BeastAuth.haFetch(`/api/services/light/turn_${on ? "on" : "off"}`, {
     method: "POST",
@@ -867,11 +868,12 @@ function reloadCameraFrame(frame, reason) {
 // and against a source that reconnects often, it fires repeatedly.
 function visibleCameraFrames() {
   return Array.from(document.querySelectorAll('iframe[src*="camera-player.html"]'))
-    .filter((frame) => frame.closest(".beast-section.is-active") && !frame.closest("#beastOvBanners"));
+    .filter((frame) => frame.closest(".beast-section.is-active") && !frame.closest("#beastOvBanners")
+      && !frame.closest("#beastOvCameras"));
 }
 
 function runCameraHealthCheck() {
-  if (document.hidden) return;
+  if (document.hidden || kioskScreenIsOff || window.BeastPower?.getState?.() === "idle") return;
   const now = Date.now();
   visibleCameraFrames().forEach((frame) => {
     const health = cameraHealth.get(frame) || { lastProgressAt: now, lastReconnectAt: 0 };
@@ -1427,9 +1429,10 @@ function setupNavigation() {
 }
 
 function syncCameraPlayers() {
+  const idle = kioskScreenIsOff || window.BeastPower?.getState?.() === "idle";
   document.querySelectorAll('iframe[src*="camera-player.html"]').forEach((frame) => {
     const section = frame.closest(".beast-section");
-    const active = !section || section.classList.contains("is-active");
+    const active = !idle && (!section || section.classList.contains("is-active"));
     try {
       frame.contentWindow?.postMessage({ type: active ? "camera-player-resume" : "camera-player-pause" }, window.location.origin);
     } catch (error) {
@@ -1439,6 +1442,7 @@ function syncCameraPlayers() {
 }
 
 function reconnectVisibleCameraPlayers() {
+  if (kioskScreenIsOff || window.BeastPower?.getState?.() === "idle") return;
   document.querySelectorAll('iframe[src*="camera-player.html"]').forEach((frame) => {
     if (!frame.closest(".beast-section.is-active") && frame.closest(".beast-section")) return;
     try { frame.contentWindow?.postMessage({ type: "camera-player-reconnect" }, window.location.origin); } catch (_) {}

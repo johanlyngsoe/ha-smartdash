@@ -103,9 +103,12 @@ These screenshots mirror the production dashboard's layout, card proportions and
 
 ### Energy
 
-- Current usage, daily usage, cost and electricity-price summaries.
-- Hourly price bars across available forecast days.
-- Consumption history and device-level "usage now" view.
+- Current electricity price, hourly price charts, available forecast days and guidance on inexpensive three-hour consumption windows.
+- Hourly consumption from ElOverblik, with the **metering date** displayed explicitly. ElOverblik readings arrive with a delay and are not presented as live consumption or today's usage.
+- The latest registered day shows total consumption (kWh) and a 24-hour bar chart. Each bar can be selected by **touch, mouse click or keyboard** to show the hour, consumption, historical electricity price and estimated cost in a detail panel inside the chart. Select another bar to change the hour; tap outside or use the close button to dismiss.
+- Estimated daily electricity cost is calculated from hourly ElOverblik consumption and matching historical Strømligning prices including VAT. The estimate is labelled as such; it is not an invoice or a live meter reading.
+- Where configured, a separate live main-meter sensor supplies instantaneous power and live consumption cards. Without one, the dashboard deliberately shows a dash and explains that no live main meter is configured; historical ElOverblik data is still shown.
+- A device-level "usage now" view is available for configured power sensors; it is not populated by ElOverblik hourly readings alone.
 - Space for actionable energy guidance, not only raw charts.
 
 ### Security and kiosk locking

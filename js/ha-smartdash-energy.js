@@ -804,6 +804,7 @@
   }
 
   async function loadHistory() {
+    if (!POWER_ENTITY_ID()) return [];
     const start = startOfTodayIso();
     try {
       const result = await BeastAuth.haFetch(`/api/history/period/${start}?filter_entity_id=${POWER_ENTITY_ID()}&minimal_response`);
